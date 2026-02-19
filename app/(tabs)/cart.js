@@ -10,6 +10,7 @@ import {
 import { router } from 'expo-router';
 import { useCart } from '../../src/context/CartContext';
 import { useAuth } from '../../src/context/AuthContext';
+import { useLanguage } from '../../src/context/LanguageContext';
 import { supabase } from '../../src/lib/supabase';
 import { Button } from '../../src/components/Button';
 import { colors, spacing, fontSize, borderRadius } from '../../src/constants/theme';
@@ -17,16 +18,21 @@ import { colors, spacing, fontSize, borderRadius } from '../../src/constants/the
 export default function CartScreen() {
   const { items, removeItem, total, clear } = useCart();
   const { user, refreshUserInfo } = useAuth();
+  const { t, locale } = useLanguage();
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [status, setStatus] = useState('idle');
 
   const handleCheckout = async () => {
     if (!user) {
-      Alert.alert('Sign In Required', 'Please sign in to checkout.', [
-        { text: 'Cancel' },
-        { text: 'Sign In', onPress: () => router.push('/(auth)/sign-in') },
-      ]);
+      Alert.alert(
+        locale === 'zh' ? '请登录' : 'Sign In Required', 
+        locale === 'zh' ? '请先登录后再结账' : 'Please sign in to checkout.', 
+        [
+          { text: locale === 'zh' ? '取消' : 'Cancel' },
+          { text: locale === 'zh' ? '登录' : 'Sign In', onPress: () => router.push('/(auth)/sign-in') },
+        ]
+      );
       return;
     }
 
@@ -44,7 +50,7 @@ export default function CartScreen() {
     if (userError || !userRows?.length) {
       setLoading(false);
       setStatus('error');
-      setMessage('No balance record found. Please contact support.');
+      setMessage(locale === 'zh' ? '无法获取用户信息' : 'No balance record found. Please contact support.');
       return;
     }
 
@@ -52,7 +58,9 @@ export default function CartScreen() {
     if (currentBalance < total) {
       setLoading(false);
       setStatus('error');
-      setMessage(`Insufficient balance ($${currentBalance.toFixed(2)}). Top up first.`);
+      setMessage(locale === 'zh' 
+        ? `余额不足 (A$${currentBalance.toFixed(2)})，请先充值` 
+        : `Insufficient balance (A$${currentBalance.toFixed(2)}). Top up first.`);
       return;
     }
 
@@ -77,7 +85,7 @@ export default function CartScreen() {
     if (Math.abs(computedTotal - total) > 0.01) {
       setLoading(false);
       setStatus('error');
-      setMessage('Cart total mismatch. Please refresh and try again.');
+      setMessage(locale === 'zh' ? '购物车金额不匹配，请刷新后重试' : 'Cart total mismatch. Please refresh and try again.');
       return;
     }
 
@@ -130,7 +138,7 @@ export default function CartScreen() {
     clear();
     setLoading(false);
     setStatus('success');
-    setMessage('Checkout successful! Your classes have been enrolled.');
+    setMessage(t('cart.checkoutSuccess'));
   };
 
   return (
@@ -138,7 +146,7 @@ export default function CartScreen() {
       {items.length === 0 ? (
         <View style={styles.emptyCard}>
           <Text style={styles.emptyText}>
-            {status === 'success' ? 'All enrolled!' : 'Your cart is empty.'}
+            {status === 'success' ? t('cart.allEnrolled') : t('cart.empty')}
           </Text>
           {status === 'success' && (
             <Text style={styles.successMessage}>{message}</Text>
@@ -147,7 +155,7 @@ export default function CartScreen() {
             style={styles.browseLink}
             onPress={() => router.push('/(tabs)/classes')}
           >
-            <Text style={styles.browseLinkText}>Browse classes</Text>
+            <Text style={styles.browseLinkText}>{t('cart.browseClasses')}</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -162,19 +170,19 @@ export default function CartScreen() {
                         weekday: 'short', month: 'short', day: 'numeric',
                       })
                     : ''}
-                  {' \u2022 $'}{c.price.toFixed(2)}
+                  {' \u2022 A$'}{c.price.toFixed(2)}
                 </Text>
               </View>
               <TouchableOpacity onPress={() => removeItem(c.id)}>
-                <Text style={styles.removeText}>Remove</Text>
+                <Text style={styles.removeText}>{t('cart.remove')}</Text>
               </TouchableOpacity>
             </View>
           ))}
 
           <View style={styles.totalCard}>
             <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Total</Text>
-              <Text style={styles.totalValue}>${total.toFixed(2)}</Text>
+              <Text style={styles.totalLabel}>{t('cart.total')}</Text>
+              <Text style={styles.totalValue}>A${total.toFixed(2)}</Text>
             </View>
 
             {message ? (
@@ -184,7 +192,7 @@ export default function CartScreen() {
             ) : null}
 
             <Button
-              title={loading ? 'Processing...' : 'Checkout'}
+              title={loading ? t('balance.processing') : t('common.checkout')}
               onPress={handleCheckout}
               loading={loading}
               style={styles.checkoutBtn}

@@ -24,9 +24,8 @@ CREATE TABLE IF NOT EXISTS "CLASSES" (
 
 ALTER TABLE "CLASSES" ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "Authenticated users can read CLASSES"
-  ON "CLASSES" FOR SELECT
-  TO authenticated
+CREATE POLICY "Authenticated users can read CLASSES"
+  ON "CLASSES" FOR SELECT TO authenticated
   USING (true);
 
 -- ============================================================
@@ -47,16 +46,16 @@ CREATE TABLE IF NOT EXISTS "Users Info" (
 
 ALTER TABLE "Users Info" ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "Users can read own info"
-  ON "Users Info" FOR SELECT
+CREATE POLICY "Users can read own info"
+  ON "Users Info" FOR SELECT TO authenticated
   USING (auth.uid() = user_id);
 
-CREATE POLICY IF NOT EXISTS "Users can update own info"
-  ON "Users Info" FOR UPDATE
+CREATE POLICY "Users can update own info"
+  ON "Users Info" FOR UPDATE TO authenticated
   USING (auth.uid() = user_id);
 
-CREATE POLICY IF NOT EXISTS "Users can insert own info"
-  ON "Users Info" FOR INSERT
+CREATE POLICY "Users can insert own info"
+  ON "Users Info" FOR INSERT TO authenticated
   WITH CHECK (auth.uid() = user_id);
 
 -- ============================================================
@@ -72,12 +71,12 @@ CREATE TABLE IF NOT EXISTS enrollments (
 
 ALTER TABLE enrollments ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "Users can read own enrollments"
-  ON enrollments FOR SELECT
+CREATE POLICY "Users can read own enrollments"
+  ON enrollments FOR SELECT TO authenticated
   USING (auth.uid() = user_id);
 
-CREATE POLICY IF NOT EXISTS "Users can insert own enrollments"
-  ON enrollments FOR INSERT
+CREATE POLICY "Users can insert own enrollments"
+  ON enrollments FOR INSERT TO authenticated
   WITH CHECK (auth.uid() = user_id);
 
 -- ============================================================
@@ -96,7 +95,7 @@ CREATE TABLE IF NOT EXISTS push_tokens (
 ALTER TABLE push_tokens ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can manage own push tokens"
-  ON push_tokens FOR ALL
+  ON push_tokens FOR ALL TO authenticated
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
@@ -117,11 +116,11 @@ CREATE TABLE IF NOT EXISTS transactions (
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can read own transactions"
-  ON transactions FOR SELECT
+  ON transactions FOR SELECT TO authenticated
   USING (auth.uid() = user_id);
 
 CREATE POLICY "Users can insert own transactions"
-  ON transactions FOR INSERT
+  ON transactions FOR INSERT TO authenticated
   WITH CHECK (auth.uid() = user_id);
 
 -- ============================================================

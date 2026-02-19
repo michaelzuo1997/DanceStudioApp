@@ -1,0 +1,140 @@
+{
+  "common": {
+    "book": "Book",
+    "cancel": "Cancel",
+    "topUp": "Top Up",
+    "checkout": "Checkout",
+    "signOut": "Sign Out",
+    "browse": "Browse",
+    "seeAll": "See All",
+    "loading": "Loading...",
+    "save": "Save",
+    "back": "Back",
+    "confirm": "Confirm",
+    "close": "Close"
+  },
+  "screens": {
+    "home": "Home",
+    "classes": "Classes",
+    "balance": "Balance",
+    "cart": "Cart",
+    "profile": "Profile",
+    "bundles": "Buy Bundles",
+    "privateTuition": "Private Tuition"
+  },
+  "categories": {
+    "chinese_classical": "Chinese Classical",
+    "ballet": "Ballet",
+    "hip_hop": "Hip Hop",
+    "kpop_youth": "Youth K-pop",
+    "korean_dance": "Korean Dance",
+    "miscellaneous": "Miscellaneous"
+  },
+  "home": {
+    "welcomeBack": "Welcome back,",
+    "currentBalance": "Current Balance",
+    "activeClasses": "Active Classes",
+    "yourSchedule": "Your Schedule",
+    "seeFullCalendar": "See Full Calendar",
+    "noUpcoming": "No upcoming classes scheduled.",
+    "browseClasses": "Browse Classes",
+    "myBundles": "My Bundles",
+    "classesRemaining": "classes remaining"
+  },
+  "classes": {
+    "list": "List",
+    "calendar": "Calendar",
+    "browseAll": "Browse All",
+    "noClasses": "No upcoming classes found.",
+    "noClassesDate": "No classes scheduled for this date.",
+    "enrolled": "Enrolled",
+    "inCart": "In Cart",
+    "adult": "Adult",
+    "children": "Children",
+    "oneHour": "1 hr",
+    "oneHalfHour": "1.5 hr",
+    "selectAudience": "Select Audience",
+    "selectDuration": "Select Duration",
+    "timetable": "Timetable",
+    "upcoming": "Upcoming Classes",
+    "bookClass": "Book Class",
+    "cancelClass": "Cancel Class"
+  },
+  "bundles": {
+    "title": "Buy Bundles",
+    "subtitle": "Class Pass",
+    "classes": "classes",
+    "expiry": "expiry",
+    "weeks": "weeks",
+    "perClass": "per class",
+    "purchase": "Purchase",
+    "anyCategory": "Any Category",
+    "purchaseSuccess": "Bundle purchased successfully!",
+    "insufficientBalance": "Insufficient balance to purchase this bundle."
+  },
+  "private": {
+    "title": "Private Tuition",
+    "selectCategory": "Select Category",
+    "preferredDate": "Preferred Date",
+    "preferredTime": "Preferred Time",
+    "duration": "Duration",
+    "notes": "Notes",
+    "notesPlaceholder": "Any special requests...",
+    "submit": "Submit Request",
+    "success": "Request submitted successfully!",
+    "pending": "Pending",
+    "confirmed": "Confirmed"
+  },
+  "profile": {
+    "account": "Account",
+    "fullName": "Full Name",
+    "email": "Email",
+    "userId": "User ID",
+    "memberSince": "Member Since",
+    "balance": "Balance",
+    "appInfo": "App Info",
+    "version": "Version",
+    "platform": "Platform",
+    "backend": "Backend",
+    "language": "Language",
+    "myBundles": "My Bundles",
+    "noBundles": "No active bundles",
+    "expires": "Expires",
+    "classesLeft": "classes left"
+  },
+  "balance": {
+    "totalBalance": "Total Balance",
+    "readyToSpend": "Ready to spend",
+    "quickTopUp": "Quick Top Up",
+    "customAmount": "Custom amount",
+    "addFunds": "Add Funds",
+    "processing": "Processing...",
+    "topUpSuccess": "Balance topped up successfully!",
+    "topUpFailed": "Top-up failed",
+    "enterAmount": "Enter an amount to add.",
+    "invalidAmount": "Enter a valid amount greater than 0.",
+    "userProfileNotFound": "User profile not found. Please sign out and sign in again.",
+    "fundsInfo": "Funds are added immediately and can be used for any class booking."
+  },
+  "cart": {
+    "empty": "Your cart is empty.",
+    "allEnrolled": "All enrolled!",
+    "total": "Total",
+    "remove": "Remove",
+    "browseClasses": "Browse classes",
+    "insufficientBalance": "Insufficient balance. Top up first.",
+    "checkoutSuccess": "Checkout successful! Your classes have been enrolled.",
+    "signInRequired": "Sign in to checkout."
+  },
+  "currency": {
+    "symbol": "A$"
+  },
+  "auth": {
+    "signIn": "Sign In",
+    "signUp": "Sign Up",
+    "signOutConfirm": "Are you sure you want to sign out?",
+    "email": "Email",
+    "password": "Password",
+    "forgotPassword": "Forgot Password?"
+  }
+}

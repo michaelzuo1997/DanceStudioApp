@@ -26,7 +26,7 @@ export default function BrowseScreen() {
   const fetchData = useCallback(async () => {
     const { data } = await supabase
       .from('CLASSES')
-      .select('id, name, class_type, start_time, end_time, instructor, room, price, cost')
+      .select('id, class_id, name, duration_name, class_type, start_time, end_time, instructor, room, price, cost')
       .gte('start_time', new Date().toISOString())
       .order('start_time', { ascending: true })
       .limit(100);
@@ -62,8 +62,8 @@ export default function BrowseScreen() {
   const classesForType = selectedType ? classesByType[selectedType] ?? [] : [];
 
   const toCartClass = (c) => ({
-    id: String(c.id),
-    name: String(c.name),
+    id: String(c.id ?? c.class_id),
+    name: String(c.name || c.duration_name || c.class_type || 'Class'),
     class_type: c.class_type || undefined,
     start_time: c.start_time,
     end_time: c.end_time,
@@ -122,10 +122,10 @@ export default function BrowseScreen() {
             ) : (
               classesForType.map((c) => (
                 <ClassCard
-                  key={c.id}
+                  key={c.id ?? c.class_id}
                   classData={toCartClass(c)}
-                  enrolled={enrolledIds.has(String(c.id))}
-                  inCart={cartIds.has(String(c.id))}
+                  enrolled={enrolledIds.has(String(c.id ?? c.class_id))}
+                  inCart={cartIds.has(String(c.id ?? c.class_id))}
                   onPress={() => setSelectedClass(toCartClass(c))}
                   onAddToCart={(item) => addItem(item)}
                 />

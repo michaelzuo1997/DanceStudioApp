@@ -10,13 +10,16 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
+import { useLanguage } from '../../src/context/LanguageContext';
 import { supabase } from '../../src/lib/supabase';
 import { colors, spacing, fontSize, borderRadius } from '../../src/constants/theme';
 
 export default function HomeScreen() {
   const { user, userInfo, refreshUserInfo } = useAuth();
+  const { t, locale } = useLanguage();
   const [upcomingClasses, setUpcomingClasses] = useState([]);
   const [enrolledCount, setEnrolledCount] = useState(0);
+  const [userBundles, setUserBundles] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const balance = userInfo?.current_balance ?? 0;
@@ -35,13 +38,27 @@ export default function HomeScreen() {
       .eq('user_id', user.id);
 
     const enrolledClasses = (enrollments ?? [])
-      .map(e => e.CLASSES) // Access joined data
-      .filter(c => c && c.start_time && new Date(c.start_time) >= new Date()) // Valid & upcoming
+      .map(e => e.CLASSES)
+      .filter(c => c && c.start_time && new Date(c.start_time) >= new Date())
       .sort((a, b) => new Date(a.start_time) - new Date(b.start_time))
       .slice(0, 5);
 
     setUpcomingClasses(enrolledClasses);
     setEnrolledCount(enrollments?.length ?? 0);
+
+    // Fetch user bundles
+    const { data: bundles } = await supabase
+      .from('user_bundles')
+      .select(`
+        *,
+        class_categories (name_en, name_zh)
+      `)
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .gt('classes_remaining', 0)
+      .gt('expires_at', new Date().toISOString());
+
+    setUserBundles(bundles || []);
 
     await refreshUserInfo();
   }, [user, refreshUserInfo]);
@@ -56,6 +73,9 @@ export default function HomeScreen() {
     setRefreshing(false);
   }, [fetchData]);
 
+  // Calculate total bundle classes
+  const totalBundleClasses = userBundles.reduce((sum, b) => sum + (b.classes_remaining || 0), 0);
+
   return (
     <ScrollView
       style={styles.container}
@@ -65,7 +85,7 @@ export default function HomeScreen() {
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
       
       <View style={styles.header}>
-        <Text style={styles.welcomeLabel}>Welcome back,</Text>
+        <Text style={styles.welcomeLabel}>{t('home.welcomeBack')}</Text>
         <Text style={styles.welcomeName} numberOfLines={1}>{String(displayName)}</Text>
       </View>
 
@@ -76,11 +96,11 @@ export default function HomeScreen() {
           activeOpacity={0.8}
         >
           <View>
-            <Text style={styles.statLabel}>Current Balance</Text>
-            <Text style={styles.statValue}>${Number(balance).toFixed(2)}</Text>
+            <Text style={[styles.statLabel, styles.whiteText]}>{t('home.currentBalance')}</Text>
+            <Text style={[styles.statValue, styles.whiteText]}>A${Number(balance).toFixed(2)}</Text>
           </View>
           <View style={styles.statAction}>
-             <Text style={styles.statActionText}>Top Up</Text>
+             <Text style={styles.statActionText}>{t('common.topUp')}</Text>
           </View>
         </TouchableOpacity>
 
@@ -90,31 +110,57 @@ export default function HomeScreen() {
           activeOpacity={0.8}
         >
            <View>
-            <Text style={styles.statLabel}>Active Classes</Text>
+            <Text style={styles.statLabel}>{t('home.activeClasses')}</Text>
             <Text style={styles.statValue}>{enrolledCount}</Text>
           </View>
           <View style={styles.statAction}>
-             <Text style={styles.statActionText}>View Schedule</Text>
+             <Text style={styles.statActionText}>{t('home.seeFullCalendar')}</Text>
           </View>
         </TouchableOpacity>
       </View>
 
+      {/* My Bundles Card */}
+      {userBundles.length > 0 && (
+        <TouchableOpacity
+          style={styles.bundlesCard}
+          onPress={() => router.push('/(tabs)/classes/bundles')}
+          activeOpacity={0.8}
+        >
+          <View style={styles.bundlesHeader}>
+            <Text style={styles.bundlesTitle}>🎫 {t('home.myBundles')}</Text>
+            <Text style={styles.bundlesArrow}>→</Text>
+          </View>
+          <View style={styles.bundlesList}>
+            {userBundles.slice(0, 3).map((b, idx) => (
+              <View key={b.id || idx} style={styles.bundleItem}>
+                <Text style={styles.bundleCount}>{b.classes_remaining}</Text>
+                <Text style={styles.bundleLabel}>
+                  {b.class_categories 
+                    ? (locale === 'zh' ? b.class_categories.name_zh : b.class_categories.name_en)
+                    : (locale === 'zh' ? '节课' : 'classes')}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </TouchableOpacity>
+      )}
+
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Your Schedule</Text>
+          <Text style={styles.sectionTitle}>{t('home.yourSchedule')}</Text>
           <TouchableOpacity onPress={() => router.push('/(tabs)/classes')}>
-            <Text style={styles.seeAllText}>See Full Calendar</Text>
+            <Text style={styles.seeAllText}>{t('home.seeFullCalendar')}</Text>
           </TouchableOpacity>
         </View>
 
         {upcomingClasses.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>No upcoming classes scheduled.</Text>
+            <Text style={styles.emptyText}>{t('home.noUpcoming')}</Text>
             <TouchableOpacity 
               style={styles.browseButton}
               onPress={() => router.push('/(tabs)/classes')}
             >
-              <Text style={styles.browseButtonText}>Browse Classes</Text>
+              <Text style={styles.browseButtonText}>{t('home.browseClasses')}</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -184,7 +230,7 @@ const styles = StyleSheet.create({
   statsRow: { 
     flexDirection: 'row', 
     gap: spacing.md, 
-    marginBottom: spacing.xxl 
+    marginBottom: spacing.lg 
   },
   statCard: {
     flex: 1,
@@ -197,6 +243,10 @@ const styles = StyleSheet.create({
   },
   balanceCard: {
     backgroundColor: colors.primary,
+    ...colors.shadows.lg,
+  },
+  whiteText: {
+    color: colors.white,
   },
   statLabel: { 
     fontSize: fontSize.xs, 
@@ -218,22 +268,48 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.accent,
   },
-  // Overrides for the dark balance card
-  balanceCard: {
-    backgroundColor: colors.primary,
-    ...colors.shadows.lg,
+  bundlesCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+    ...colors.shadows.soft,
   },
-  // We need specific styles for text inside the dark card
-  // But StyleSheet doesn't support nested selection like CSS.
-  // We'll handle this by conditionally styling in the JSX if needed,
-  // or just keeping the design simple. 
-  // Wait, I applied `balanceCard` style which sets bg to primary (black).
-  // So text inside needs to be white.
-  
-  // Let's refine the Balance Card logic in the JSX to use specific text styles.
-  // Actually, I'll just use a different approach in the JSX for simplicity in this edit.
-  // Retrying the style definition for clarity:
-  
+  bundlesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  bundlesTitle: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  bundlesArrow: {
+    fontSize: fontSize.lg,
+    color: colors.accent,
+  },
+  bundlesList: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  bundleItem: {
+    alignItems: 'center',
+    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+  },
+  bundleCount: {
+    fontSize: fontSize.xl,
+    fontWeight: '700',
+    color: colors.accent,
+  },
+  bundleLabel: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+  },
   section: {
     marginTop: spacing.sm,
   },

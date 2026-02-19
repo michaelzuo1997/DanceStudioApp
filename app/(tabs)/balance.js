@@ -8,6 +8,7 @@ import {
   Alert,
 } from 'react-native';
 import { useAuth } from '../../src/context/AuthContext';
+import { useLanguage } from '../../src/context/LanguageContext';
 import { supabase } from '../../src/lib/supabase';
 import { Button } from '../../src/components/Button';
 import { Input } from '../../src/components/Input';
@@ -15,6 +16,7 @@ import { colors, spacing, fontSize, borderRadius } from '../../src/constants/the
 
 export default function BalanceScreen() {
   const { user, userInfo, refreshUserInfo } = useAuth();
+  const { t, locale } = useLanguage();
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -33,13 +35,13 @@ export default function BalanceScreen() {
     const value = amount.trim();
     if (!value) {
       setStatus('error');
-      setMessage('Enter an amount to add.');
+      setMessage(t('balance.enterAmount'));
       return;
     }
     const num = parseFloat(value);
     if (!Number.isFinite(num) || num <= 0) {
       setStatus('error');
-      setMessage('Enter a valid amount greater than 0.');
+      setMessage(t('balance.invalidAmount'));
       return;
     }
 
@@ -54,24 +56,39 @@ export default function BalanceScreen() {
     let success = false;
     let newBalance = null;
 
-    if (!rpcError) {
-      // RPC succeeded
+    // Check if RPC call succeeded and returned ok: true
+    if (!rpcError && result?.ok === true) {
       success = true;
+      newBalance = result.new_balance;
+    } else if (!rpcError && result?.ok === false) {
+      // RPC returned ok: false with an error message
+      setLoading(false);
+      setStatus('error');
+      setMessage(result?.error || t('balance.topUpFailed') || 'Top-up failed');
+      return;
     } else {
       // RPC failed, try client-side fallback
       console.log('RPC failed, attempting client-side top-up:', rpcError.message);
       
-      // 1. Get current balance again to be safe
-      const { data: userData, error: fetchError } = await supabase
+      // 1. Get current balance again to be safe (use limit(1) to avoid "Cannot coerce to single JSON" when 0 or 2+ rows)
+      const { data: userRows, error: fetchError } = await supabase
         .from('Users Info')
         .select('current_balance')
         .eq('user_id', user.id)
-        .single();
+        .limit(1);
 
       if (fetchError) {
         setLoading(false);
         setStatus('error');
         setMessage(`Failed to fetch user data: ${fetchError.message}`);
+        return;
+      }
+
+      const userData = userRows?.[0];
+      if (!userData) {
+        setLoading(false);
+        setStatus('error');
+        setMessage(t('balance.userProfileNotFound') || 'User profile not found. Please sign out and sign in again.');
         return;
       }
 
@@ -96,7 +113,8 @@ export default function BalanceScreen() {
         await supabase.from('transactions').insert({
           user_id: user.id,
           amount: num,
-          type: 'top_up',
+          type: 'topup',  // Must match CHECK constraint: 'topup', 'purchase', 'refund'
+          balance_after: updatedBal,
           created_at: new Date().toISOString(),
           description: 'Balance Top Up'
         });
@@ -111,7 +129,7 @@ export default function BalanceScreen() {
       await refreshUserInfo();
       setLoading(false);
       setStatus('success');
-      setMessage('Balance topped up successfully!');
+      setMessage(t('balance.topUpSuccess'));
       setAmount('');
     }
   };
@@ -119,7 +137,7 @@ export default function BalanceScreen() {
   if (!user) {
     return (
       <View style={styles.centerContainer}>
-        <Text style={styles.warningText}>Sign in to view your balance.</Text>
+        <Text style={styles.warningText}>{t('cart.signInRequired')}</Text>
       </View>
     );
   }
@@ -132,22 +150,22 @@ export default function BalanceScreen() {
     >
       <View style={styles.balanceCard}>
         <View style={styles.balanceHeader}>
-          <Text style={styles.balanceLabel}>Total Balance</Text>
-          <Text style={styles.balanceCurrency}>USD</Text>
+          <Text style={styles.balanceLabel}>{t('balance.totalBalance')}</Text>
+          <Text style={styles.balanceCurrency}>AUD</Text>
         </View>
-        <Text style={styles.balanceValue}>${Number(balance).toFixed(2)}</Text>
+        <Text style={styles.balanceValue}>A${Number(balance).toFixed(2)}</Text>
         <Text style={styles.balanceHint}>
-          Ready to spend
+          {t('balance.readyToSpend')}
         </Text>
       </View>
 
-      <Text style={styles.sectionTitle}>Quick Top Up</Text>
+      <Text style={styles.sectionTitle}>{t('balance.quickTopUp')}</Text>
       <View style={styles.topUpCard}>
         <View style={styles.presetGrid}>
           {[10, 25, 50, 100].map((preset) => (
             <Button
               key={preset}
-              title={`$${preset}`}
+              title={`A$${preset}`}
               variant="outline"
               size="sm"
               onPress={() => setAmount(String(preset))}
@@ -158,7 +176,7 @@ export default function BalanceScreen() {
         </View>
 
         <Input
-          label="Custom amount"
+          label={t('balance.customAmount')}
           value={amount}
           onChangeText={setAmount}
           placeholder="0.00"
@@ -176,7 +194,7 @@ export default function BalanceScreen() {
         ) : null}
 
         <Button
-          title={loading ? 'Processing...' : 'Add Funds'}
+          title={loading ? t('balance.processing') : t('balance.addFunds')}
           onPress={handleTopUp}
           loading={loading}
           size="lg"
@@ -185,7 +203,7 @@ export default function BalanceScreen() {
 
       <View style={styles.infoCard}>
          <Text style={styles.infoText}>
-           Funds are added immediately and can be used for any class booking.
+           {t('balance.fundsInfo')}
          </Text>
       </View>
     </ScrollView>

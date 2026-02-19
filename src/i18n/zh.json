@@ -1,0 +1,140 @@
+{
+  "common": {
+    "book": "预约",
+    "cancel": "取消",
+    "topUp": "充值",
+    "checkout": "结账",
+    "signOut": "退出登录",
+    "browse": "浏览",
+    "seeAll": "查看全部",
+    "loading": "加载中...",
+    "save": "保存",
+    "back": "返回",
+    "confirm": "确认",
+    "close": "关闭"
+  },
+  "screens": {
+    "home": "首页",
+    "classes": "课程",
+    "balance": "余额",
+    "cart": "购物车",
+    "profile": "个人中心",
+    "bundles": "购买次卡",
+    "privateTuition": "私教课程"
+  },
+  "categories": {
+    "chinese_classical": "中国舞",
+    "ballet": "芭蕾",
+    "hip_hop": "街舞",
+    "kpop_youth": "青少年 K-pop",
+    "korean_dance": "韩舞",
+    "miscellaneous": "其他"
+  },
+  "home": {
+    "welcomeBack": "欢迎回来，",
+    "currentBalance": "当前余额",
+    "activeClasses": "活跃课程",
+    "yourSchedule": "您的课程表",
+    "seeFullCalendar": "查看完整日历",
+    "noUpcoming": "暂无即将开始的课程。",
+    "browseClasses": "浏览课程",
+    "myBundles": "我的次卡",
+    "classesRemaining": "节剩余"
+  },
+  "classes": {
+    "list": "列表",
+    "calendar": "日历",
+    "browseAll": "浏览全部",
+    "noClasses": "暂无即将开始的课程。",
+    "noClassesDate": "该日期暂无课程安排。",
+    "enrolled": "已报名",
+    "inCart": "已加入购物车",
+    "adult": "成人",
+    "children": "少儿",
+    "oneHour": "1小时",
+    "oneHalfHour": "1.5小时",
+    "selectAudience": "选择受众",
+    "selectDuration": "选择时长",
+    "timetable": "课程表",
+    "upcoming": "即将开始的课程",
+    "bookClass": "预约课程",
+    "cancelClass": "取消课程"
+  },
+  "bundles": {
+    "title": "购买次卡",
+    "subtitle": "次卡",
+    "classes": "节课",
+    "expiry": "有效期",
+    "weeks": "周",
+    "perClass": "每节课",
+    "purchase": "购买",
+    "anyCategory": "任意课程",
+    "purchaseSuccess": "次卡购买成功！",
+    "insufficientBalance": "余额不足，无法购买此次卡。"
+  },
+  "private": {
+    "title": "私教课程",
+    "selectCategory": "选择课程类型",
+    "preferredDate": "首选日期",
+    "preferredTime": "首选时间",
+    "duration": "时长",
+    "notes": "备注",
+    "notesPlaceholder": "任何特殊要求...",
+    "submit": "提交申请",
+    "success": "申请提交成功！",
+    "pending": "待确认",
+    "confirmed": "已确认"
+  },
+  "profile": {
+    "account": "账户信息",
+    "fullName": "姓名",
+    "email": "邮箱",
+    "userId": "用户ID",
+    "memberSince": "注册时间",
+    "balance": "余额",
+    "appInfo": "应用信息",
+    "version": "版本",
+    "platform": "平台",
+    "backend": "后端",
+    "language": "语言",
+    "myBundles": "我的次卡",
+    "noBundles": "暂无有效次卡",
+    "expires": "到期",
+    "classesLeft": "节剩余"
+  },
+  "balance": {
+    "totalBalance": "总余额",
+    "readyToSpend": "可用余额",
+    "quickTopUp": "快速充值",
+    "customAmount": "自定义金额",
+    "addFunds": "充值",
+    "processing": "处理中...",
+    "topUpSuccess": "充值成功！",
+    "topUpFailed": "充值失败",
+    "enterAmount": "请输入充值金额。",
+    "invalidAmount": "请输入有效的金额。",
+    "userProfileNotFound": "未找到用户资料，请退出后重新登录。",
+    "fundsInfo": "充值即时到账，可用于预约任何课程。"
+  },
+  "cart": {
+    "empty": "购物车为空。",
+    "allEnrolled": "全部已报名！",
+    "total": "总计",
+    "remove": "移除",
+    "browseClasses": "浏览课程",
+    "insufficientBalance": "余额不足，请先充值。",
+    "checkoutSuccess": "结账成功！您已成功报名课程。",
+    "signInRequired": "请登录后结账。"
+  },
+  "currency": {
+    "symbol": "A$"
+  },
+  "auth": {
+    "signIn": "登录",
+    "signUp": "注册",
+    "signOutConfirm": "确定要退出登录吗？",
+    "email": "邮箱",
+    "password": "密码",
+    "forgotPassword": "忘记密码？"
+  }
+}
