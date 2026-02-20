@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -40,97 +40,28 @@ export default function CartScreen() {
     setMessage('');
     setStatus('idle');
 
-    // Check balance
-    const { data: userRows, error: userError } = await supabase
-      .from('Users Info')
-      .select('current_balance')
-      .eq('user_id', user.id)
-      .limit(1);
-
-    if (userError || !userRows?.length) {
-      setLoading(false);
-      setStatus('error');
-      setMessage(locale === 'zh' ? '无法获取用户信息' : 'No balance record found. Please contact support.');
-      return;
+    const results = [];
+    for (const item of items) {
+      const timetableId = item.timetable_id || item.id;
+      if (!timetableId) {
+        results.push({ ok: false, error: 'Missing timetable id' });
+        continue;
+      }
+      const { data, error } = await supabase.rpc('book_class', { p_timetable_id: timetableId });
+      if (error || data?.ok === false) {
+        results.push({ ok: false, error: error?.message || data?.error || 'Booking failed' });
+      } else {
+        results.push({ ok: true });
+      }
     }
 
-    const currentBalance = Number(userRows[0]?.current_balance ?? 0);
-    if (currentBalance < total) {
-      setLoading(false);
+    const failed = results.filter((r) => !r.ok);
+    const succeeded = results.length - failed.length;
+
+    if (failed.length > 0) {
       setStatus('error');
-      setMessage(locale === 'zh' 
-        ? `余额不足 (A$${currentBalance.toFixed(2)})，请先充值` 
-        : `Insufficient balance (A$${currentBalance.toFixed(2)}). Top up first.`);
-      return;
-    }
-
-    // Verify class prices
-    const classIds = items.map((i) => i.id);
-    const { data: classRows, error: classesError } = await supabase
-      .from('CLASSES')
-      .select('id, price, cost')
-      .in('id', classIds);
-
-    if (classesError) {
+      setMessage(`${succeeded} booked, ${failed.length} failed. ${failed[0]?.error || ''}`);
       setLoading(false);
-      setStatus('error');
-      setMessage(`Failed to verify classes: ${classesError.message}`);
-      return;
-    }
-
-    const computedTotal = (classRows ?? []).reduce(
-      (sum, c) => sum + Number(c.price ?? c.cost ?? 0), 0
-    );
-
-    if (Math.abs(computedTotal - total) > 0.01) {
-      setLoading(false);
-      setStatus('error');
-      setMessage(locale === 'zh' ? '购物车金额不匹配，请刷新后重试' : 'Cart total mismatch. Please refresh and try again.');
-      return;
-    }
-
-    // Deduct balance
-    const newBalance = currentBalance - total;
-    const { error: updateError } = await supabase
-      .from('Users Info')
-      .update({ current_balance: newBalance })
-      .eq('user_id', user.id);
-
-    if (updateError) {
-      setLoading(false);
-      setStatus('error');
-      setMessage(`Failed to update balance: ${updateError.message}`);
-      return;
-    }
-
-    // Log transaction
-    try {
-      await supabase.from('transactions').insert({
-        user_id: user.id,
-        amount: -total, // Negative for spending
-        type: 'purchase',
-        created_at: new Date().toISOString(),
-        description: `Purchased ${items.length} class${items.length > 1 ? 'es' : ''}`
-      });
-    } catch (e) {
-      console.warn('Failed to log purchase transaction:', e);
-      // Continue - this is non-blocking for the user
-    }
-
-    // Insert enrollments
-    const enrollments = classIds.map((class_id) => ({
-      user_id: user.id,
-      class_id,
-    }));
-
-    const { error: insertError } = await supabase
-      .from('enrollments')
-      .insert(enrollments);
-
-    if (insertError) {
-      setLoading(false);
-      setStatus('error');
-      setMessage(`Payment succeeded but enrollment failed: ${insertError.message}`);
       return;
     }
 
@@ -140,6 +71,17 @@ export default function CartScreen() {
     setStatus('success');
     setMessage(t('cart.checkoutSuccess'));
   };
+
+  const resetStateIfEmpty = useCallback(() => {
+    if (items.length === 0) {
+      setStatus('idle');
+      setMessage('');
+    }
+  }, [items.length]);
+
+  useEffect(() => {
+    resetStateIfEmpty();
+  }, [resetStateIfEmpty]);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -165,12 +107,12 @@ export default function CartScreen() {
               <View style={styles.cartItemLeft}>
                 <Text style={styles.cartItemName} numberOfLines={1}>{c.name}</Text>
                 <Text style={styles.cartItemMeta}>
-                  {c.start_time
-                    ? new Date(c.start_time).toLocaleDateString(undefined, {
+                  {c.class_date
+                    ? new Date(`${c.class_date}T${c.start_time || '00:00'}`).toLocaleDateString(undefined, {
                         weekday: 'short', month: 'short', day: 'numeric',
                       })
                     : ''}
-                  {' \u2022 A$'}{c.price.toFixed(2)}
+                  {' \u2022 A$'}{Number(c.price || 0).toFixed(2)}
                 </Text>
               </View>
               <TouchableOpacity onPress={() => removeItem(c.id)}>

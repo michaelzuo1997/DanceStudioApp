@@ -5,6 +5,7 @@
     "topUp": "Top Up",
     "checkout": "Checkout",
     "signOut": "Sign Out",
+    "added": "Added",
     "browse": "Browse",
     "seeAll": "See All",
     "loading": "Loading...",
@@ -58,7 +59,15 @@
     "timetable": "Timetable",
     "upcoming": "Upcoming Classes",
     "bookClass": "Book Class",
-    "cancelClass": "Cancel Class"
+    "cancelClass": "Cancel Class",
+    "capacity": "capacity",
+    "bookSuccess": "Class booked successfully.",
+    "bookFailed": "Booking failed",
+    "cancelConfirm": "Cancel this class?",
+    "cancelFailed": "Cancel failed",
+    "cancelSuccess": "Cancelled. Refund will be applied if eligible.",
+    "unavailable": "No upcoming class",
+    "tryRefresh": "No matching upcoming class found. Try refreshing or select an upcoming class below."
   },
   "bundles": {
     "title": "Buy Bundles",
@@ -121,8 +130,10 @@
     "allEnrolled": "All enrolled!",
     "total": "Total",
     "remove": "Remove",
+    "addToCart": "Add to Cart",
     "browseClasses": "Browse classes",
     "insufficientBalance": "Insufficient balance. Top up first.",
+    "addedToCart": "Added to cart",
     "checkoutSuccess": "Checkout successful! Your classes have been enrolled.",
     "signInRequired": "Sign in to checkout."
   },
@@ -135,6 +146,10 @@
     "signOutConfirm": "Are you sure you want to sign out?",
     "email": "Email",
     "password": "Password",
-    "forgotPassword": "Forgot Password?"
+    "forgotPassword": "Forgot Password?",
+    "landing": {
+      "tagline": "Your dance journey starts here",
+      "createAccount": "Create Account"
+    }
   }
 }

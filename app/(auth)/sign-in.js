@@ -7,15 +7,19 @@ import {
   ScrollView,
   StyleSheet,
   Alert,
+  TouchableOpacity,
 } from 'react-native';
 import { Link, router } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
+import { useLanguage } from '../../src/context/LanguageContext';
 import { Button } from '../../src/components/Button';
 import { Input } from '../../src/components/Input';
+import { Logo } from '../../src/components/Logo';
 import { colors, spacing, fontSize } from '../../src/constants/theme';
 
 export default function SignIn() {
   const { signInWithEmail } = useAuth();
+  const { t } = useLanguage();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -46,8 +50,16 @@ export default function SignIn() {
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={() => router.back()}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Text style={styles.backText}>← {t('common.back')}</Text>
+        </TouchableOpacity>
+
         <View style={styles.header}>
-          <Text style={styles.title}>Dance Studio</Text>
+          <Logo size="lg" />
           <Text style={styles.subtitle}>Sign in to your account</Text>
         </View>
 
@@ -103,12 +115,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.xxl,
   },
+  backButton: {
+    position: 'absolute',
+    top: spacing.lg,
+    left: spacing.lg,
+    zIndex: 1,
+  },
+  backText: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
   header: {
     alignItems: 'center',
     marginBottom: spacing.xxxl,
   },
   title: {
-    fontSize: fontSize.xxxl,
+    fontSize: fontSize.xxl,
     fontWeight: '700',
     color: colors.text,
   },

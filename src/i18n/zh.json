@@ -5,6 +5,7 @@
     "topUp": "充值",
     "checkout": "结账",
     "signOut": "退出登录",
+    "added": "已添加",
     "browse": "浏览",
     "seeAll": "查看全部",
     "loading": "加载中...",
@@ -58,7 +59,15 @@
     "timetable": "课程表",
     "upcoming": "即将开始的课程",
     "bookClass": "预约课程",
-    "cancelClass": "取消课程"
+    "cancelClass": "取消课程",
+    "capacity": "容量",
+    "bookSuccess": "预约成功。",
+    "bookFailed": "预约失败",
+    "cancelConfirm": "确定要取消该课程吗？",
+    "cancelFailed": "取消失败",
+    "cancelSuccess": "已取消，如符合条件将自动退款。",
+    "unavailable": "暂无可预约课程",
+    "tryRefresh": "未找到匹配的课程。请刷新或从下方“即将开始的课程”中选择。"
   },
   "bundles": {
     "title": "购买次卡",
@@ -121,8 +130,10 @@
     "allEnrolled": "全部已报名！",
     "total": "总计",
     "remove": "移除",
+    "addToCart": "加入购物车",
     "browseClasses": "浏览课程",
     "insufficientBalance": "余额不足，请先充值。",
+    "addedToCart": "已加入购物车",
     "checkoutSuccess": "结账成功！您已成功报名课程。",
     "signInRequired": "请登录后结账。"
   },
@@ -135,6 +146,10 @@
     "signOutConfirm": "确定要退出登录吗？",
     "email": "邮箱",
     "password": "密码",
-    "forgotPassword": "忘记密码？"
+    "forgotPassword": "忘记密码？",
+    "landing": {
+      "tagline": "您的舞蹈之旅从这里开始",
+      "createAccount": "创建账户"
+    }
   }
 }

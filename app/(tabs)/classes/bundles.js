@@ -119,8 +119,43 @@ export default function BundlesScreen() {
         .eq('user_id', user.id)
         .limit(1);
 
-      const userInfo = userRows?.[0];
-      if (userError || !userInfo) {
+      let userInfo = userRows?.[0];
+
+      // If user profile doesn't exist, create it using upsert
+      if (!userInfo && !userError) {
+        console.log('Creating missing Users Info record for user:', user.id);
+        const { error: createError } = await supabase
+          .from('Users Info')
+          .upsert({
+            user_id: user.id,
+            name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+            full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+            current_balance: 0,
+          }, {
+            onConflict: 'user_id',
+            ignoreDuplicates: true,
+          });
+
+        if (createError) {
+          Alert.alert('Error', locale === 'zh' ? '无法创建用户资料' : 'Unable to create user profile');
+          setLoading(false);
+          return;
+        }
+
+        // Fetch the newly created (or existing) record
+        const { data: newUserRows } = await supabase
+          .from('Users Info')
+          .select('current_balance')
+          .eq('user_id', user.id)
+          .limit(1);
+
+        userInfo = newUserRows?.[0];
+        if (!userInfo) {
+          Alert.alert('Error', locale === 'zh' ? '无法获取用户信息' : 'Unable to fetch user info after creation');
+          setLoading(false);
+          return;
+        }
+      } else if (userError || !userInfo) {
         Alert.alert('Error', locale === 'zh' ? '无法获取用户信息' : 'Unable to fetch user info');
         setLoading(false);
         return;
@@ -147,12 +182,19 @@ export default function BundlesScreen() {
         p_bundle_id: bundle.id,
       });
 
-      if (!rpcError && rpcResult?.ok) {
+      const rpcRow = Array.isArray(rpcResult) ? rpcResult[0] : rpcResult;
+
+      if (!rpcError && rpcRow?.ok === true) {
         await refreshUserInfo();
         await fetchData();
         Alert.alert(
           locale === 'zh' ? '购买成功' : 'Success',
           locale === 'zh' ? '次卡购买成功！' : 'Bundle purchased successfully!'
+        );
+      } else if (!rpcError && rpcRow?.ok === false) {
+        Alert.alert(
+          locale === 'zh' ? '购买失败' : 'Purchase Failed',
+          rpcRow?.message || (locale === 'zh' ? '请重试' : 'Please try again')
         );
       } else {
         // Manual fallback

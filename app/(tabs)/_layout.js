@@ -2,7 +2,9 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../src/constants/theme';
 import { useCart } from '../../src/context/CartContext';
-import { View, Text, StyleSheet } from 'react-native';
+import { useAuth } from '../../src/context/AuthContext';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { Redirect } from 'expo-router';
 
 function CartTabIcon({ color, size }) {
   const { items } = useCart();
@@ -39,6 +41,21 @@ const badgeStyles = StyleSheet.create({
 });
 
 export default function TabsLayout() {
+  const { user, loading } = useAuth();
+
+  // Show loading while checking auth state
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  // Redirect to auth if not authenticated
+  if (!user) {
+    return <Redirect href="/(auth)" />;
+  }
   return (
     <Tabs
       screenOptions={{
@@ -61,6 +78,13 @@ export default function TabsLayout() {
         },
       }}
     >
+      <Tabs.Screen
+        name="calendar"
+        options={{
+          title: 'Calendar',
+          href: null,
+        }}
+      />
       <Tabs.Screen
         name="index"
         options={{
@@ -108,3 +132,12 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+  },
+});

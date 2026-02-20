@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Alert, TouchableOpacity, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
 import { useLanguage } from '../../src/context/LanguageContext';
@@ -38,6 +38,22 @@ export default function ProfileScreen() {
   };
 
   const handleSignOut = () => {
+    if (Platform.OS === 'web') {
+      const confirmed = typeof window !== 'undefined'
+        ? window.confirm(t('auth.signOutConfirm'))
+        : true;
+      if (!confirmed) return;
+      signOut().finally(() => {
+        try {
+          router.dismissAll();
+        } catch (e) {
+          // dismissAll might not be available in all versions
+        }
+        router.replace('/(auth)');
+      });
+      return;
+    }
+
     Alert.alert(
       t('common.signOut'), 
       t('auth.signOutConfirm'), 
@@ -47,8 +63,21 @@ export default function ProfileScreen() {
           text: t('common.signOut'),
           style: 'destructive',
           onPress: async () => {
-            await signOut();
-            router.replace('/(auth)/sign-in');
+            const { error } = await signOut();
+            if (error) {
+              Alert.alert(
+                locale === 'zh' ? '登出失败' : 'Sign Out Failed',
+                error.message || (locale === 'zh' ? '请重试' : 'Please try again')
+              );
+            }
+            // Always navigate to auth landing page after local sign-out
+            // Using dismissAll() then replace() ensures clean navigation state
+            try {
+              router.dismissAll();
+            } catch (e) {
+              // dismissAll might not be available in all versions
+            }
+            router.replace('/(auth)');
           },
         },
       ]

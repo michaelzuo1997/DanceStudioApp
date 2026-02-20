@@ -13,6 +13,8 @@ import { useAuth } from '../../src/context/AuthContext';
 import { useLanguage } from '../../src/context/LanguageContext';
 import { supabase } from '../../src/lib/supabase';
 import { colors, spacing, fontSize, borderRadius } from '../../src/constants/theme';
+import { InstructorModal } from '../../src/components/InstructorModal';
+import { StudioModal } from '../../src/components/StudioModal';
 
 export default function HomeScreen() {
   const { user, userInfo, refreshUserInfo } = useAuth();
@@ -21,6 +23,8 @@ export default function HomeScreen() {
   const [enrolledCount, setEnrolledCount] = useState(0);
   const [userBundles, setUserBundles] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedInstructor, setSelectedInstructor] = useState(null);
+  const [selectedStudio, setSelectedStudio] = useState(null);
 
   const balance = userInfo?.current_balance ?? 0;
   const displayName = userInfo?.name ?? userInfo?.full_name ?? user?.user_metadata?.full_name ?? 'Dancer';
@@ -29,18 +33,38 @@ export default function HomeScreen() {
     if (!user) return;
     const { data: enrollments } = await supabase
       .from('enrollments')
-      .select(`
-        class_id,
-        CLASSES (
-          id, name, class_type, start_time, end_time, instructor, room, price
-        )
-      `)
-      .eq('user_id', user.id);
+      .select('id, timetable_id')
+      .eq('user_id', user.id)
+      .eq('status', 'active');
 
-    const enrolledClasses = (enrollments ?? [])
-      .map(e => e.CLASSES)
-      .filter(c => c && c.start_time && new Date(c.start_time) >= new Date())
-      .sort((a, b) => new Date(a.start_time) - new Date(b.start_time))
+    const timetableIds = (enrollments ?? [])
+      .map((e) => e.timetable_id)
+      .filter((id) => Boolean(id));
+
+    let timetableRows = [];
+    if (timetableIds.length > 0) {
+      ({ data: timetableRows } = await supabase
+        .from('class_timetable')
+        .select(`
+          id, class_date, start_time, duration_minutes, price_per_class,
+          instructors (id, name, photo_url, bio, experience, awards, contact_email, contact_phone),
+          studios (id, name, address, notes),
+          class_categories (name_en, name_zh)
+        `)
+        .in('id', timetableIds));
+    }
+
+    const enrollmentByTimetableId = new Map(
+      (enrollments ?? []).map((e) => [String(e.timetable_id), e.id])
+    );
+
+    const enrolledClasses = (timetableRows ?? [])
+      .map((c) => ({
+        ...c,
+        enrollment_id: enrollmentByTimetableId.get(String(c.id)) || null,
+      }))
+      .filter(c => c && c.class_date && new Date(c.class_date) >= new Date())
+      .sort((a, b) => new Date(a.class_date) - new Date(b.class_date))
       .slice(0, 5);
 
     setUpcomingClasses(enrolledClasses);
@@ -77,17 +101,17 @@ export default function HomeScreen() {
   const totalBundleClasses = userBundles.reduce((sum, b) => sum + (b.classes_remaining || 0), 0);
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-    >
-      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
-      
-      <View style={styles.header}>
-        <Text style={styles.welcomeLabel}>{t('home.welcomeBack')}</Text>
-        <Text style={styles.welcomeName} numberOfLines={1}>{String(displayName)}</Text>
-      </View>
+    <View style={styles.container}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+      >
+        <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+        
+        <View style={styles.header}>
+          <Text style={styles.welcomeLabel}>{t('home.welcomeBack')}</Text>
+          <Text style={styles.welcomeName} numberOfLines={1}>{String(displayName)}</Text>
+        </View>
 
       <View style={styles.statsRow}>
         <TouchableOpacity
@@ -106,7 +130,7 @@ export default function HomeScreen() {
 
         <TouchableOpacity
           style={styles.statCard}
-          onPress={() => router.push('/(tabs)/classes')}
+          onPress={() => router.push('/(tabs)/calendar')}
           activeOpacity={0.8}
         >
            <View>
@@ -148,7 +172,7 @@ export default function HomeScreen() {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{t('home.yourSchedule')}</Text>
-          <TouchableOpacity onPress={() => router.push('/(tabs)/classes')}>
+          <TouchableOpacity onPress={() => router.push('/(tabs)/calendar')}>
             <Text style={styles.seeAllText}>{t('home.seeFullCalendar')}</Text>
           </TouchableOpacity>
         </View>
@@ -166,12 +190,14 @@ export default function HomeScreen() {
         ) : (
           <View style={styles.classList}>
             {upcomingClasses.map((c) => {
-              const startTime = c.start_time ? new Date(c.start_time) : null;
+              const startTime = c.class_date && c.start_time
+                ? new Date(`${c.class_date}T${c.start_time}`)
+                : null;
               return (
                 <TouchableOpacity
                   key={c.id}
                   style={styles.classItem}
-                  onPress={() => router.push('/(tabs)/classes')}
+                  onPress={() => router.push('/(tabs)/calendar')}
                   activeOpacity={0.7}
                 >
                   <View style={styles.dateBox}>
@@ -182,15 +208,55 @@ export default function HomeScreen() {
                   </View>
                   
                   <View style={styles.classInfo}>
-                    <Text style={styles.className} numberOfLines={1}>{c.name}</Text>
-                    <Text style={styles.classMeta}>
-                      {startTime?.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
-                      {' \u2022 '}{c.instructor || 'Staff'}
+                    <Text style={styles.className} numberOfLines={1}>
+                      {c.class_categories
+                        ? (locale === 'zh' ? c.class_categories.name_zh : c.class_categories.name_en)
+                        : (c.name || 'Class Session')}
                     </Text>
+                    <View style={styles.classMetaRow}>
+                      <Text style={styles.classMeta}>
+                        {startTime?.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+                      </Text>
+                      <Text style={styles.classMetaSeparator}>{'\u2022'}</Text>
+                      <TouchableOpacity onPress={() => setSelectedInstructor(c.instructors || null)}>
+                        <Text style={styles.classMetaLink}>{c.instructors?.name || 'Staff'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                    {c.studios?.name && (
+                      <TouchableOpacity onPress={() => setSelectedStudio(c.studios)}>
+                        <Text style={styles.classSubMeta}>{c.studios.name}</Text>
+                      </TouchableOpacity>
+                    )}
+                    {typeof c.price_per_class !== 'undefined' && (
+                      <Text style={styles.classSubMeta}>A${Number(c.price_per_class || 0).toFixed(0)}</Text>
+                    )}
                   </View>
                   
-                  <View style={styles.classStatus}>
-                    <View style={styles.statusDot} />
+                  <View style={styles.classActions}>
+                    <TouchableOpacity
+                      style={styles.cancelButton}
+                      onPress={async () => {
+                        if (!c.enrollment_id) return;
+                        const confirmMsg = t('classes.cancelConfirm') || 'Cancel this class?';
+                        const shouldCancel = typeof window !== 'undefined'
+                          ? window.confirm(confirmMsg)
+                          : true;
+                        if (!shouldCancel) return;
+                        const { data: cancelRes, error: cancelErr } = await supabase
+                          .rpc('cancel_enrollment', { p_enrollment_id: c.enrollment_id });
+                        if (cancelErr || cancelRes?.[0]?.ok === false) {
+                          const msg = cancelErr?.message || cancelRes?.[0]?.message || t('classes.cancelFailed') || 'Cancel failed';
+                          if (typeof window !== 'undefined') window.alert(msg);
+                          return;
+                        }
+                        if (typeof window !== 'undefined') {
+                          window.alert(t('classes.cancelSuccess') || 'Cancelled. Refund will be applied if eligible.');
+                        }
+                        await fetchData();
+                      }}
+                    >
+                      <Text style={styles.cancelButtonText}>{t('classes.cancelClass')}</Text>
+                    </TouchableOpacity>
                   </View>
                 </TouchableOpacity>
               );
@@ -198,7 +264,10 @@ export default function HomeScreen() {
           </View>
         )}
       </View>
-    </ScrollView>
+      </ScrollView>
+      <InstructorModal instructor={selectedInstructor} onClose={() => setSelectedInstructor(null)} />
+      <StudioModal studio={selectedStudio} onClose={() => setSelectedStudio(null)} />
+    </View>
   );
 }
 
@@ -400,13 +469,38 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.textSecondary,
   },
-  classStatus: {
-    paddingLeft: spacing.md,
+  classMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
   },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.success,
+  classMetaSeparator: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+  },
+  classMetaLink: {
+    fontSize: fontSize.sm,
+    color: colors.accent,
+    fontWeight: '600',
+  },
+  classSubMeta: {
+    fontSize: fontSize.xs,
+    color: colors.textTertiary,
+    marginTop: 2,
+  },
+  classActions: {
+    paddingLeft: spacing.md,
+    alignItems: 'flex-end',
+  },
+  cancelButton: {
+    backgroundColor: colors.error,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+  },
+  cancelButtonText: {
+    fontSize: fontSize.xs,
+    fontWeight: '600',
+    color: colors.white,
   },
 });

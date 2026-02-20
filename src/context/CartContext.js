@@ -55,7 +55,7 @@ export function CartProvider({ children }) {
   }, []);
 
   const total = useMemo(
-    () => items.reduce((sum, i) => sum + (i.price ?? 0), 0),
+    () => items.reduce((sum, i) => sum + (Number(i.price) || 0), 0),
     [items]
   );
 

@@ -11,6 +11,7 @@ import { Link, router } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
 import { Button } from '../../src/components/Button';
 import { Input } from '../../src/components/Input';
+import { Logo } from '../../src/components/Logo';
 import { colors, spacing, fontSize } from '../../src/constants/theme';
 
 export default function ForgotPassword() {
@@ -39,7 +40,8 @@ export default function ForgotPassword() {
   if (sent) {
     return (
       <View style={styles.successContainer}>
-        <Text style={styles.title}>Check your email</Text>
+        <Logo size="lg" />
+        <Text style={styles.successTitle}>Check your email</Text>
         <Text style={styles.successText}>
           If an account exists for {email}, we sent a password reset link.
         </Text>
@@ -62,7 +64,7 @@ export default function ForgotPassword() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <Text style={styles.title}>Reset Password</Text>
+          <Logo size="lg" />
           <Text style={styles.subtitle}>
             Enter your email and we'll send you a reset link.
           </Text>
@@ -153,6 +155,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.xxl,
     backgroundColor: colors.background,
+  },
+  successTitle: {
+    fontSize: fontSize.xl,
+    fontWeight: '700',
+    color: colors.text,
+    marginTop: spacing.lg,
   },
   successText: {
     fontSize: fontSize.md,

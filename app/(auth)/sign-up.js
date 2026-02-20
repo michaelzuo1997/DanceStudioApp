@@ -6,15 +6,19 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  TouchableOpacity,
 } from 'react-native';
 import { Link, router } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
+import { useLanguage } from '../../src/context/LanguageContext';
 import { Button } from '../../src/components/Button';
 import { Input } from '../../src/components/Input';
+import { Logo } from '../../src/components/Logo';
 import { colors, spacing, fontSize } from '../../src/constants/theme';
 
 export default function SignUp() {
   const { signUpWithEmail } = useAuth();
+  const { t } = useLanguage();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -79,8 +83,16 @@ export default function SignUp() {
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={() => router.back()}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Text style={styles.backText}>← {t('common.back')}</Text>
+        </TouchableOpacity>
+
         <View style={styles.header}>
-          <Text style={styles.title}>Create Account</Text>
+          <Logo size="lg" />
           <Text style={styles.subtitle}>Join our dance studio</Text>
         </View>
 
@@ -142,6 +154,17 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     padding: spacing.xxl,
+  },
+  backButton: {
+    position: 'absolute',
+    top: spacing.lg,
+    left: spacing.lg,
+    zIndex: 1,
+  },
+  backText: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    fontWeight: '500',
   },
   header: {
     alignItems: 'center',

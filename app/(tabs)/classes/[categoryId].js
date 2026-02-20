@@ -7,13 +7,17 @@ import {
   RefreshControl,
   StyleSheet,
   StatusBar,
+  Alert,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useAuth } from '../../../src/context/AuthContext';
 import { useLanguage } from '../../../src/context/LanguageContext';
-import { useCart } from '../../../src/context/CartContext';
 import { supabase } from '../../../src/lib/supabase';
+import { useCart } from '../../../src/context/CartContext';
 import { Button } from '../../../src/components/Button';
+import { InstructorModal } from '../../../src/components/InstructorModal';
+import { StudioModal } from '../../../src/components/StudioModal';
 import { colors, spacing, fontSize, borderRadius } from '../../../src/constants/theme';
 
 // Category mapping
@@ -32,7 +36,7 @@ export default function CategoryDetailScreen() {
   const { categoryId } = useLocalSearchParams();
   const { user } = useAuth();
   const { t, locale } = useLanguage();
-  const { addItem } = useCart();
+  const { addItem, items } = useCart();
   
   const [category, setCategory] = useState(null);
   const [timetable, setTimetable] = useState([]);
@@ -41,6 +45,8 @@ export default function CategoryDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [audience, setAudience] = useState('adult'); // 'adult' | 'children'
   const [duration, setDuration] = useState(null); // null | 60 | 90
+  const [selectedInstructor, setSelectedInstructor] = useState(null);
+  const [selectedStudio, setSelectedStudio] = useState(null);
 
   const fetchData = useCallback(async () => {
     // Fetch category from database or use default
@@ -62,12 +68,18 @@ export default function CategoryDetailScreen() {
 
     const catId = categoryData?.id;
 
-    // Fetch timetable (category_id is UUID; only filter when we have it)
+    // Fetch timetable (single sessions from source of truth)
     let timetableQuery = supabase
       .from('class_timetable')
-      .select('*')
+      .select(`
+        *,
+        instructors (id, name, photo_url, bio, experience, awards, contact_email, contact_phone),
+        studios (id, name, address, notes),
+        class_categories (name_en, name_zh)
+      `)
       .eq('is_active', true)
-      .order('day_of_week', { ascending: true })
+      .gte('class_date', new Date().toISOString().slice(0, 10))
+      .order('class_date', { ascending: true })
       .order('start_time', { ascending: true });
     if (catId) {
       timetableQuery = timetableQuery.eq('category_id', catId);
@@ -75,28 +87,15 @@ export default function CategoryDetailScreen() {
     const { data: timetableData } = await timetableQuery;
     setTimetable(timetableData || []);
 
-    // Fetch upcoming classes: match by category_id (UUID) or class_type (key) for DBs where category_id may be null
-    let classesQuery = supabase
-      .from('CLASSES')
-      .select('*')
-      .gte('start_time', new Date().toISOString())
-      .order('start_time', { ascending: true })
-      .limit(20);
-    if (catId) {
-      classesQuery = classesQuery.or(`category_id.eq.${catId},class_type.eq.${categoryId}`);
-    } else {
-      classesQuery = classesQuery.eq('class_type', categoryId);
-    }
-    const { data: classesData } = await classesQuery;
-    setClasses(classesData || []);
+    setClasses(timetableData || []);
 
     // Fetch enrollments
     if (user) {
       const { data: enrollments } = await supabase
         .from('enrollments')
-        .select('class_id')
+        .select('timetable_id')
         .eq('user_id', user.id);
-      setEnrolledIds(new Set((enrollments || []).map(e => String(e.class_id))));
+      setEnrolledIds(new Set((enrollments || []).map(e => String(e.timetable_id))));
     }
   }, [categoryId, user]);
 
@@ -117,11 +116,11 @@ export default function CategoryDetailScreen() {
     });
   }, [timetable, audience, duration]);
 
-  // Group timetable by day
+  // Group timetable by date
   const timetableByDay = useMemo(() => {
     const grouped = {};
     filteredTimetable.forEach(item => {
-      const day = item.day_of_week;
+      const day = item.class_date || 'unknown';
       if (!grouped[day]) grouped[day] = [];
       grouped[day].push(item);
     });
@@ -142,23 +141,40 @@ export default function CategoryDetailScreen() {
     return `${displayHour}:${minutes} ${ampm}`;
   };
 
-  const handleBookClass = (classItem) => {
-    addItem({
-      id: String(classItem.id),
-      name: classItem.name,
-      class_type: getCategoryName(),
-      start_time: classItem.start_time,
-      end_time: classItem.end_time,
-      instructor: classItem.instructor,
-      room: classItem.room,
-      price: Number(classItem.price || classItem.cost || 0),
-    });
-  };
+  const handleAddToCart = (item) => {
+    if (!user) {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert(locale === 'zh' ? '请先登录后再加入购物车' : 'Please sign in to add to cart.');
+      } else {
+        Alert.alert(locale === 'zh' ? '请登录' : 'Sign In Required', locale === 'zh' ? '请先登录后再加入购物车' : 'Please sign in to add to cart.');
+      }
+      return;
+    }
 
-  const handleBookTimetable = (item) => {
-    // For timetable items, we'd need to create a class instance
-    // For now, just show an alert or navigate to booking
-    alert(`Book ${item.instructor}'s class at ${formatTime(item.start_time)}`);
+    const already = items.some((i) => String(i.id) === String(item.id));
+    if (already) return;
+
+    const className = item.class_categories
+      ? (locale === 'zh' ? item.class_categories.name_zh : item.class_categories.name_en)
+      : getCategoryName();
+
+    addItem({
+      id: String(item.id),
+      timetable_id: String(item.id),
+      name: className,
+      class_date: item.class_date,
+      start_time: item.start_time,
+      duration_minutes: item.duration_minutes,
+      instructor: item.instructors?.name || item.instructor || '',
+      room: item.studios?.name || item.room || '',
+      price: Number(item.price_per_class || 0),
+    });
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.alert(t('cart.addedToCart') || 'Added to cart');
+    } else {
+      Alert.alert(t('common.added') || 'Added', t('cart.addedToCart') || 'Added to cart');
+    }
   };
 
   return (
@@ -239,7 +255,9 @@ export default function CategoryDetailScreen() {
           ) : (
             Object.entries(timetableByDay).map(([day, items]) => (
               <View key={day} style={styles.daySection}>
-                <Text style={styles.dayTitle}>{DAYS[day]}</Text>
+                <Text style={styles.dayTitle}>
+                  {new Date(day).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                </Text>
                 {items.map((item, idx) => (
                   <View key={item.id || idx} style={styles.timetableItem}>
                     <View style={styles.timetimeContainer}>
@@ -247,17 +265,38 @@ export default function CategoryDetailScreen() {
                       <Text style={styles.durationText}>{item.duration_minutes} min</Text>
                     </View>
                     <View style={styles.timeInfo}>
-                      <Text style={styles.instructorText}>{item.instructor}</Text>
-                      <Text style={styles.roomText}>{item.room}</Text>
+                      <Text style={styles.classTitle}>
+                        {item.class_categories
+                          ? (locale === 'zh' ? item.class_categories.name_zh : item.class_categories.name_en)
+                          : getCategoryName()}
+                      </Text>
+                      <TouchableOpacity onPress={() => setSelectedInstructor(item.instructors || null)}>
+                        <Text style={styles.instructorText}>{item.instructors?.name || item.instructor || 'Instructor'}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => setSelectedStudio(item.studios || null)}>
+                        <Text style={styles.roomText}>{item.studios?.name || item.room || 'Studio'}</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.capacityText}>
+                        {Number(item.current_enrollment || 0)}/{Number(item.max_capacity || 0)} {t('classes.capacity')}
+                      </Text>
                     </View>
                     <View style={styles.timePrice}>
                       <Text style={styles.priceText}>A${Number(item.price_per_class || 0).toFixed(0)}</Text>
-                      <Button
-                        title={t('common.book')}
-                        size="sm"
-                        variant="secondary"
-                        onPress={() => handleBookTimetable(item)}
-                      />
+                      {(() => {
+                        const isFull = Number(item.max_capacity || 0) > 0
+                          && Number(item.current_enrollment || 0) >= Number(item.max_capacity || 0);
+                        const isEnrolled = enrolledIds.has(String(item.id));
+                        const label = isEnrolled ? t('classes.enrolled') : t('cart.addToCart');
+                        return (
+                          <Button
+                            title={label}
+                            size="sm"
+                            variant="secondary"
+                            disabled={isFull || isEnrolled}
+                            onPress={() => handleAddToCart(item)}
+                          />
+                        );
+                      })()}
                     </View>
                   </View>
                 ))}
@@ -272,33 +311,39 @@ export default function CategoryDetailScreen() {
             <Text style={styles.sectionTitle}>{t('classes.upcoming')}</Text>
             {classes.map((c) => {
               const classId = c.id ?? c.class_id;
-              const isEnrolled = enrolledIds.has(String(classId));
-              const startTime = c.start_time ? new Date(c.start_time) : null;
+              const isEnrolled = enrolledIds.has(String(c.id));
+              const startTime = c.class_date ? new Date(c.class_date + 'T' + c.start_time) : null;
               const displayName = c.name || c.duration_name || c.class_type || 'Dance Class';
               
               return (
                 <View key={classId} style={styles.classItem}>
                   <View style={styles.classInfo}>
-                    <Text style={styles.className}>{displayName}</Text>
+                    <Text style={styles.className}>
+                      {c.class_categories
+                        ? (locale === 'zh' ? c.class_categories.name_zh : c.class_categories.name_en)
+                        : displayName}
+                    </Text>
                     <Text style={styles.classMeta}>
                       {startTime?.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
                       {' at '}
-                      {startTime?.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+                      {formatTime(c.start_time)}
                     </Text>
-                    {c.instructor && <Text style={styles.classInstructor}>with {c.instructor}</Text>}
+                    <TouchableOpacity onPress={() => setSelectedInstructor(c.instructors || null)}>
+                      {c.instructors?.name && <Text style={styles.classInstructor}>with {c.instructors.name}</Text>}
+                    </TouchableOpacity>
                   </View>
                   <View style={styles.classActions}>
-                    <Text style={styles.classPrice}>A${Number(c.price || c.cost || 0).toFixed(0)}</Text>
+                    <Text style={styles.classPrice}>A${Number(c.price_per_class || 0).toFixed(0)}</Text>
                     {isEnrolled ? (
                       <View style={styles.enrolledBadge}>
                         <Text style={styles.enrolledText}>{t('classes.enrolled')}</Text>
                       </View>
                     ) : (
                       <Button
-                        title={t('common.book')}
+                        title={t('cart.addToCart')}
                         size="sm"
                         variant="secondary"
-                        onPress={() => handleBookClass(c)}
+                        onPress={() => handleAddToCart(c)}
                       />
                     )}
                   </View>
@@ -308,6 +353,8 @@ export default function CategoryDetailScreen() {
           </View>
         )}
       </ScrollView>
+      <InstructorModal instructor={selectedInstructor} onClose={() => setSelectedInstructor(null)} />
+      <StudioModal studio={selectedStudio} onClose={() => setSelectedStudio(null)} />
     </View>
   );
 }
@@ -460,9 +507,20 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.text,
   },
+  classTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 2,
+  },
   roomText: {
     fontSize: fontSize.xs,
     color: colors.textSecondary,
+  },
+  capacityText: {
+    fontSize: fontSize.xs,
+    color: colors.textTertiary,
+    marginTop: 2,
   },
   timePrice: {
     alignItems: 'flex-end',

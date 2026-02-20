@@ -70,6 +70,16 @@ export default function BalanceScreen() {
       // RPC failed, try client-side fallback
       console.log('RPC failed, attempting client-side top-up:', rpcError.message);
       
+      // Check if this is the updated_at trigger error - user needs to run migration
+      if (rpcError.message && rpcError.message.includes('updated_at')) {
+        setLoading(false);
+        setStatus('error');
+        setMessage(locale === 'zh' 
+          ? '数据库需要更新。请运行最新的迁移脚本。' 
+          : 'Database needs migration. Please run the latest migration script.');
+        return;
+      }
+      
       // 1. Get current balance again to be safe (use limit(1) to avoid "Cannot coerce to single JSON" when 0 or 2+ rows)
       const { data: userRows, error: fetchError } = await supabase
         .from('Users Info')
@@ -84,22 +94,68 @@ export default function BalanceScreen() {
         return;
       }
 
-      const userData = userRows?.[0];
+      let userData = userRows?.[0];
+
+      // If user profile doesn't exist, create it using upsert
       if (!userData) {
-        setLoading(false);
-        setStatus('error');
-        setMessage(t('balance.userProfileNotFound') || 'User profile not found. Please sign out and sign in again.');
-        return;
+        console.log('Creating missing Users Info record for user:', user.id);
+        const { error: createError } = await supabase
+          .from('Users Info')
+          .upsert({
+            user_id: user.id,
+            name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+            full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+            current_balance: 0,
+          }, {
+            onConflict: 'user_id',
+            ignoreDuplicates: true,
+          });
+
+        if (createError) {
+          setLoading(false);
+          setStatus('error');
+          setMessage(`Failed to create profile: ${createError.message}`);
+          return;
+        }
+
+        // Fetch the newly created (or existing) record
+        const { data: newUserRows } = await supabase
+          .from('Users Info')
+          .select('current_balance')
+          .eq('user_id', user.id)
+          .limit(1);
+
+        userData = newUserRows?.[0];
+        if (!userData) {
+          setLoading(false);
+          setStatus('error');
+          setMessage('Failed to fetch user profile after creation.');
+          return;
+        }
       }
 
       const currentBal = Number(userData?.current_balance ?? 0);
       const updatedBal = currentBal + num;
 
-      // 2. Update balance
-      const { error: updateError } = await supabase
+      // 2. Update balance - try with updated_at first, then without if it fails
+      let updateError = null;
+      
+      // First try with updated_at (for databases where column exists)
+      const updateResult = await supabase
         .from('Users Info')
-        .update({ current_balance: updatedBal })
+        .update({ current_balance: updatedBal, updated_at: new Date().toISOString() })
         .eq('user_id', user.id);
+      updateError = updateResult.error;
+      
+      // If updated_at column doesn't exist, try without it
+      if (updateError && updateError.message && updateError.message.includes('updated_at')) {
+        console.log('updated_at column not found, trying without it');
+        const retryResult = await supabase
+          .from('Users Info')
+          .update({ current_balance: updatedBal })
+          .eq('user_id', user.id);
+        updateError = retryResult.error;
+      }
 
       if (updateError) {
         setLoading(false);

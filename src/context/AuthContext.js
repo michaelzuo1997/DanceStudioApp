@@ -51,6 +51,28 @@ export function AuthProvider({ children }) {
       password,
       options: { data: { full_name: fullName } },
     });
+
+    // Ensure Users Info record exists after successful signup
+    // Uses upsert to handle case where DB trigger already created the record
+    if (!error && data?.user) {
+      const { error: profileError } = await supabase
+        .from('Users Info')
+        .upsert({
+          user_id: data.user.id,
+          name: fullName,
+          full_name: fullName,
+          current_balance: 0,
+        }, {
+          onConflict: 'user_id',
+          ignoreDuplicates: true,
+        });
+
+      if (profileError && !profileError.message.includes('duplicate')) {
+        console.warn('Failed to create user profile:', profileError.message);
+        // Don't fail signup if profile creation fails - fallback in balance/bundles will handle it
+      }
+    }
+
     return { data, error };
   }, []);
 
@@ -60,7 +82,25 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
+    try {
+      // First, clear local state immediately to prevent any race conditions
+      setUser(null);
+      setSession(null);
+      setUserInfo(null);
+      
+      // Then sign out from Supabase
+      // Use local scope to reliably clear the device session even if network is flaky
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
+      if (error) {
+        console.error('Sign out error:', error.message);
+        return { error };
+      }
+      
+      return { error: null };
+    } catch (e) {
+      console.error('Sign out exception:', e);
+      return { error: e };
+    }
   }, []);
 
   const value = useMemo(() => ({
