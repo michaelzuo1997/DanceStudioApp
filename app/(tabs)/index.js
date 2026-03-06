@@ -3,102 +3,168 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   RefreshControl,
   StyleSheet,
   StatusBar,
+  Alert,
+  Platform,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
 import { useLanguage } from '../../src/context/LanguageContext';
+import { useCampus } from '../../src/context/CampusContext';
 import { supabase } from '../../src/lib/supabase';
-import { colors, spacing, fontSize, borderRadius } from '../../src/constants/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { colors, spacing, fontSize, borderRadius, fontFamily, typography } from '../../src/constants/theme';
+import { CampusSelectorDropdown } from '../../src/components/CampusSelectorDropdown';
+import { NoticeboardCarousel } from '../../src/components/NoticeboardCarousel';
+import { NoticeboardExpandModal } from '../../src/components/NoticeboardExpandModal';
+import { UpcomingWeekView } from '../../src/components/UpcomingWeekView';
 import { InstructorModal } from '../../src/components/InstructorModal';
 import { StudioModal } from '../../src/components/StudioModal';
 
 export default function HomeScreen() {
   const { user, userInfo, refreshUserInfo } = useAuth();
   const { t, locale } = useLanguage();
-  const [upcomingClasses, setUpcomingClasses] = useState([]);
-  const [enrolledCount, setEnrolledCount] = useState(0);
-  const [userBundles, setUserBundles] = useState([]);
+  const { selectedCampus } = useCampus();
+  const [enrolledClasses, setEnrolledClasses] = useState([]);
+  const [notices, setNotices] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedInstructor, setSelectedInstructor] = useState(null);
   const [selectedStudio, setSelectedStudio] = useState(null);
+  const [selectedNotice, setSelectedNotice] = useState(null);
 
-  const balance = userInfo?.current_balance ?? 0;
   const displayName = userInfo?.name ?? userInfo?.full_name ?? user?.user_metadata?.full_name ?? 'Dancer';
 
   const fetchData = useCallback(async () => {
     if (!user) return;
-    const { data: enrollments } = await supabase
+
+    // Fetch enrolled classes
+    const { data: enrollments, error: enrollmentErr } = await supabase
       .from('enrollments')
       .select('id, timetable_id')
       .eq('user_id', user.id)
       .eq('status', 'active');
 
+    if (enrollmentErr) {
+      console.error('[HomeScreen] enrollments fetch failed:', enrollmentErr.message);
+      return;
+    }
+
     const timetableIds = (enrollments ?? [])
       .map((e) => e.timetable_id)
-      .filter((id) => Boolean(id));
+      .filter(Boolean);
 
     let timetableRows = [];
     if (timetableIds.length > 0) {
-      ({ data: timetableRows } = await supabase
+      const { data: ttData, error: ttErr } = await supabase
         .from('class_timetable')
         .select(`
-          id, class_date, start_time, duration_minutes, price_per_class,
+          id, class_date, start_time, duration_minutes, price_per_class, campus_id,
           instructors (id, name, photo_url, bio, experience, awards, contact_email, contact_phone),
           studios (id, name, address, notes),
           class_categories (name_en, name_zh)
         `)
-        .in('id', timetableIds));
+        .in('id', timetableIds);
+      if (ttErr) {
+        console.error('[HomeScreen] timetable fetch failed:', ttErr.message);
+      }
+      timetableRows = ttData ?? [];
     }
 
-    const enrollmentByTimetableId = new Map(
+    const enrollmentMap = new Map(
       (enrollments ?? []).map((e) => [String(e.timetable_id), e.id])
     );
 
-    const enrolledClasses = (timetableRows ?? [])
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const enrolled = timetableRows
       .map((c) => ({
         ...c,
-        enrollment_id: enrollmentByTimetableId.get(String(c.id)) || null,
+        enrollment_id: enrollmentMap.get(String(c.id)) || null,
       }))
-      .filter(c => c && c.class_date && new Date(c.class_date) >= new Date())
-      .sort((a, b) => new Date(a.class_date) - new Date(b.class_date))
-      .slice(0, 5);
+      .filter((c) => c.class_date && c.class_date >= todayStr)
+      .sort((a, b) => (a.class_date > b.class_date ? 1 : a.class_date < b.class_date ? -1 : 0));
 
-    setUpcomingClasses(enrolledClasses);
-    setEnrolledCount(enrollments?.length ?? 0);
-
-    // Fetch user bundles
-    const { data: bundles } = await supabase
-      .from('user_bundles')
-      .select(`
-        *,
-        class_categories (name_en, name_zh)
-      `)
-      .eq('user_id', user.id)
-      .eq('is_active', true)
-      .gt('classes_remaining', 0)
-      .gt('expires_at', new Date().toISOString());
-
-    setUserBundles(bundles || []);
-
+    setEnrolledClasses(enrolled);
     await refreshUserInfo();
   }, [user, refreshUserInfo]);
+
+  const fetchNotices = useCallback(async () => {
+    const now = new Date().toISOString();
+    let query = supabase
+      .from('noticeboard')
+      .select('*')
+      .eq('is_active', true)
+      .lte('starts_at', now)
+      .order('priority', { ascending: false })
+      .limit(10);
+
+    if (selectedCampus) {
+      query = query.or(`campus_id.is.null,campus_id.eq.${selectedCampus}`);
+    }
+
+    const { data, error: noticeErr } = await query;
+    if (noticeErr) {
+      console.error('[HomeScreen] noticeboard fetch failed:', noticeErr.message);
+      setNotices([]);
+      return;
+    }
+    const active = (data ?? []).filter(
+      (n) => !n.expires_at || new Date(n.expires_at) >= new Date()
+    );
+    setNotices(active);
+  }, [selectedCampus]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    fetchNotices();
+  }, [fetchNotices]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchData();
+    await Promise.all([fetchData(), fetchNotices()]);
     setRefreshing(false);
-  }, [fetchData]);
+  }, [fetchData, fetchNotices]);
 
-  // Calculate total bundle classes
-  const totalBundleClasses = userBundles.reduce((sum, b) => sum + (b.classes_remaining || 0), 0);
+  const handleCancel = async (enrollmentId) => {
+    if (!enrollmentId) return;
+    const confirmMsg = t('classes.cancelConfirm') || 'Cancel this class?';
+
+    const doCancel = async () => {
+      const { data: cancelRes, error: cancelErr } = await supabase
+        .rpc('cancel_enrollment', { p_enrollment_id: enrollmentId });
+
+      if (cancelErr || cancelRes?.[0]?.ok === false) {
+        const msg = cancelErr?.message || cancelRes?.[0]?.message || t('classes.cancelFailed') || 'Cancel failed';
+        Alert.alert(t('common.error') || 'Error', msg);
+        return;
+      }
+      Alert.alert(
+        t('common.success') || 'Success',
+        t('classes.cancelSuccess') || 'Cancelled. Refund will be applied if eligible.'
+      );
+      await fetchData();
+    };
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.confirm(confirmMsg)) {
+        await doCancel();
+      }
+    } else {
+      Alert.alert(
+        t('classes.cancelClass') || 'Cancel Class',
+        confirmMsg,
+        [
+          { text: t('common.back') || 'Back', style: 'cancel' },
+          { text: t('common.confirm') || 'Confirm', style: 'destructive', onPress: doCancel },
+        ]
+      );
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -107,298 +173,178 @@ export default function HomeScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
         <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
-        
-        <View style={styles.header}>
-          <Text style={styles.welcomeLabel}>{t('home.welcomeBack')}</Text>
-          <Text style={styles.welcomeName} numberOfLines={1}>{String(displayName)}</Text>
-        </View>
 
-      <View style={styles.statsRow}>
-        <TouchableOpacity
-          style={[styles.statCard, styles.balanceCard]}
-          onPress={() => router.push('/(tabs)/balance')}
-          activeOpacity={0.8}
-        >
-          <View>
-            <Text style={[styles.statLabel, styles.whiteText]}>{t('home.currentBalance')}</Text>
-            <Text style={[styles.statValue, styles.whiteText]}>A${Number(balance).toFixed(2)}</Text>
+        {/* Header: Welcome + Campus/Calendar */}
+        <View style={styles.headerRow}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.welcomeLabel}>{t('home.welcomeBack')}</Text>
+            <Text style={styles.welcomeName} numberOfLines={1}>{String(displayName)}</Text>
           </View>
-          <View style={styles.statAction}>
-             <Text style={styles.statActionText}>{t('common.topUp')}</Text>
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.statCard}
-          onPress={() => router.push('/(tabs)/calendar')}
-          activeOpacity={0.8}
-        >
-           <View>
-            <Text style={styles.statLabel}>{t('home.activeClasses')}</Text>
-            <Text style={styles.statValue}>{enrolledCount}</Text>
-          </View>
-          <View style={styles.statAction}>
-             <Text style={styles.statActionText}>{t('home.seeFullCalendar')}</Text>
-          </View>
-        </TouchableOpacity>
-      </View>
-
-      {/* My Bundles Card */}
-      {userBundles.length > 0 && (
-        <TouchableOpacity
-          style={styles.bundlesCard}
-          onPress={() => router.push('/(tabs)/classes/bundles')}
-          activeOpacity={0.8}
-        >
-          <View style={styles.bundlesHeader}>
-            <Text style={styles.bundlesTitle}>🎫 {t('home.myBundles')}</Text>
-            <Text style={styles.bundlesArrow}>→</Text>
-          </View>
-          <View style={styles.bundlesList}>
-            {userBundles.slice(0, 3).map((b, idx) => (
-              <View key={b.id || idx} style={styles.bundleItem}>
-                <Text style={styles.bundleCount}>{b.classes_remaining}</Text>
-                <Text style={styles.bundleLabel}>
-                  {b.class_categories 
-                    ? (locale === 'zh' ? b.class_categories.name_zh : b.class_categories.name_en)
-                    : (locale === 'zh' ? '节课' : 'classes')}
-                </Text>
-              </View>
-            ))}
-          </View>
-        </TouchableOpacity>
-      )}
-
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t('home.yourSchedule')}</Text>
-          <TouchableOpacity onPress={() => router.push('/(tabs)/calendar')}>
-            <Text style={styles.seeAllText}>{t('home.seeFullCalendar')}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {upcomingClasses.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>{t('home.noUpcoming')}</Text>
-            <TouchableOpacity 
-              style={styles.browseButton}
-              onPress={() => router.push('/(tabs)/classes')}
+          <View style={styles.headerRight}>
+            <CampusSelectorDropdown />
+            <Pressable
+              style={({ pressed }) => [styles.calendarIcon, pressed && { opacity: 0.7 }]}
+              onPress={() => router.push('/(tabs)/calendar')}
+              testID="calendar-chip"
             >
-              <Text style={styles.browseButtonText}>{t('home.browseClasses')}</Text>
-            </TouchableOpacity>
+              <Ionicons name="calendar-outline" size={22} color={colors.accent} />
+            </Pressable>
           </View>
-        ) : (
-          <View style={styles.classList}>
-            {upcomingClasses.map((c) => {
-              const startTime = c.class_date && c.start_time
-                ? new Date(`${c.class_date}T${c.start_time}`)
-                : null;
-              return (
-                <TouchableOpacity
-                  key={c.id}
-                  style={styles.classItem}
-                  onPress={() => router.push('/(tabs)/calendar')}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.dateBox}>
-                    <Text style={styles.dateDay}>{startTime?.getDate()}</Text>
-                    <Text style={styles.dateMonth}>
-                      {startTime?.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}
-                    </Text>
-                  </View>
-                  
-                  <View style={styles.classInfo}>
-                    <Text style={styles.className} numberOfLines={1}>
-                      {c.class_categories
-                        ? (locale === 'zh' ? c.class_categories.name_zh : c.class_categories.name_en)
-                        : (c.name || 'Class Session')}
-                    </Text>
-                    <View style={styles.classMetaRow}>
-                      <Text style={styles.classMeta}>
-                        {startTime?.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
-                      </Text>
-                      <Text style={styles.classMetaSeparator}>{'\u2022'}</Text>
-                      <TouchableOpacity onPress={() => setSelectedInstructor(c.instructors || null)}>
-                        <Text style={styles.classMetaLink}>{c.instructors?.name || 'Staff'}</Text>
-                      </TouchableOpacity>
-                    </View>
-                    {c.studios?.name && (
-                      <TouchableOpacity onPress={() => setSelectedStudio(c.studios)}>
-                        <Text style={styles.classSubMeta}>{c.studios.name}</Text>
-                      </TouchableOpacity>
-                    )}
-                    {typeof c.price_per_class !== 'undefined' && (
-                      <Text style={styles.classSubMeta}>A${Number(c.price_per_class || 0).toFixed(0)}</Text>
-                    )}
-                  </View>
-                  
-                  <View style={styles.classActions}>
-                    <TouchableOpacity
-                      style={styles.cancelButton}
-                      onPress={async () => {
-                        if (!c.enrollment_id) return;
-                        const confirmMsg = t('classes.cancelConfirm') || 'Cancel this class?';
-                        const shouldCancel = typeof window !== 'undefined'
-                          ? window.confirm(confirmMsg)
-                          : true;
-                        if (!shouldCancel) return;
-                        const { data: cancelRes, error: cancelErr } = await supabase
-                          .rpc('cancel_enrollment', { p_enrollment_id: c.enrollment_id });
-                        if (cancelErr || cancelRes?.[0]?.ok === false) {
-                          const msg = cancelErr?.message || cancelRes?.[0]?.message || t('classes.cancelFailed') || 'Cancel failed';
-                          if (typeof window !== 'undefined') window.alert(msg);
-                          return;
-                        }
-                        if (typeof window !== 'undefined') {
-                          window.alert(t('classes.cancelSuccess') || 'Cancelled. Refund will be applied if eligible.');
-                        }
-                        await fetchData();
-                      }}
-                    >
-                      <Text style={styles.cancelButtonText}>{t('classes.cancelClass')}</Text>
-                    </TouchableOpacity>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
+        </View>
+
+        {/* Noticeboard Carousel */}
+        {notices.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('home.notices')}</Text>
+            <NoticeboardCarousel
+              notices={notices}
+              onPressNotice={setSelectedNotice}
+            />
           </View>
         )}
-      </View>
+
+        {/* My Enrolled Classes */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('home.myClasses')}</Text>
+
+          {enrolledClasses.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>{t('home.noUpcoming')}</Text>
+              <Pressable
+                style={({ pressed }) => [styles.browseButton, pressed && { opacity: 0.85 }]}
+                onPress={() => router.push('/(tabs)/classes')}
+              >
+                <Text style={styles.browseButtonText}>{t('home.browseClasses')}</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.classList}>
+              {enrolledClasses.map((c) => {
+                const startTime = c.class_date && c.start_time
+                  ? new Date(`${c.class_date}T${c.start_time}`)
+                  : null;
+                return (
+                  <Pressable
+                    key={c.id}
+                    style={({ pressed }) => [styles.classItem, pressed && { opacity: 0.85 }]}
+                    onPress={() => router.push('/(tabs)/calendar')}
+                  >
+                    <View style={styles.dateBox}>
+                      <Text style={styles.dateDay}>{startTime?.getDate()}</Text>
+                      <Text style={styles.dateMonth}>
+                        {startTime?.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}
+                      </Text>
+                    </View>
+
+                    <View style={styles.classInfo}>
+                      <Text style={styles.className} numberOfLines={1}>
+                        {c.class_categories
+                          ? (locale === 'zh' ? c.class_categories.name_zh : c.class_categories.name_en)
+                          : 'Class Session'}
+                      </Text>
+                      <View style={styles.classMetaRow}>
+                        <Text style={styles.classMeta}>
+                          {startTime?.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+                        </Text>
+                        <Text style={styles.classMetaSeparator}>{'\u2022'}</Text>
+                        <Pressable style={({ pressed }) => [pressed && { opacity: 0.85 }]} onPress={() => setSelectedInstructor(c.instructors || null)}>
+                          <Text style={styles.classMetaLink}>{c.instructors?.name || 'Staff'}</Text>
+                        </Pressable>
+                      </View>
+                      {c.studios?.name && (
+                        <Pressable style={({ pressed }) => [pressed && { opacity: 0.85 }]} onPress={() => setSelectedStudio(c.studios)}>
+                          <Text style={styles.classSubMeta}>{c.studios.name}</Text>
+                        </Pressable>
+                      )}
+                    </View>
+
+                    <View style={styles.classActions}>
+                      <Pressable
+                        style={({ pressed }) => [styles.cancelButton, pressed && { opacity: 0.85 }]}
+                        onPress={() => handleCancel(c.enrollment_id)}
+                      >
+                        <Text style={styles.cancelButtonText}>{t('classes.cancelClass')}</Text>
+                      </Pressable>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+        </View>
+
+        {/* Upcoming This Week */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('home.upcomingThisWeek')}</Text>
+          <UpcomingWeekView />
+        </View>
+
       </ScrollView>
       <InstructorModal instructor={selectedInstructor} onClose={() => setSelectedInstructor(null)} />
       <StudioModal studio={selectedStudio} onClose={() => setSelectedStudio(null)} />
+      <NoticeboardExpandModal
+        visible={!!selectedNotice}
+        notice={selectedNotice}
+        notices={notices}
+        onClose={() => setSelectedNotice(null)}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: colors.background 
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
   },
-  content: { 
+  content: {
     padding: spacing.lg,
     paddingTop: spacing.xl,
     paddingBottom: spacing.xxxl,
   },
-  header: { 
-    marginBottom: spacing.xl,
-    paddingHorizontal: spacing.xs,
-  },
-  welcomeLabel: { 
-    fontSize: fontSize.md, 
-    color: colors.textSecondary,
-    marginBottom: 4,
-  },
-  welcomeName: { 
-    fontSize: fontSize.xxl, 
-    fontWeight: '700', 
-    color: colors.text,
-    letterSpacing: -0.5,
-  },
-  statsRow: { 
-    flexDirection: 'row', 
-    gap: spacing.md, 
-    marginBottom: spacing.lg 
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    justifyContent: 'space-between',
-    minHeight: 120,
-    ...colors.shadows.sm,
-  },
-  balanceCard: {
-    backgroundColor: colors.primary,
-    ...colors.shadows.lg,
-  },
-  whiteText: {
-    color: colors.white,
-  },
-  statLabel: { 
-    fontSize: fontSize.xs, 
-    color: colors.textSecondary, 
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: spacing.xs,
-  },
-  statValue: { 
-    fontSize: fontSize.xxl, 
-    fontWeight: '700', 
-    color: colors.text,
-  },
-  statAction: {
-    marginTop: spacing.md,
-  },
-  statActionText: {
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-    color: colors.accent,
-  },
-  bundlesCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.xl,
-    ...colors.shadows.soft,
-  },
-  bundlesHeader: {
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  bundlesTitle: {
-    fontSize: fontSize.md,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  bundlesArrow: {
-    fontSize: fontSize.lg,
-    color: colors.accent,
-  },
-  bundlesList: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  bundleItem: {
-    alignItems: 'center',
-    backgroundColor: colors.surfaceAlt,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-  },
-  bundleCount: {
-    fontSize: fontSize.xl,
-    fontWeight: '700',
-    color: colors.accent,
-  },
-  bundleLabel: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-  },
-  section: {
-    marginTop: spacing.sm,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: spacing.lg,
     paddingHorizontal: spacing.xs,
   },
-  sectionTitle: { 
-    fontSize: fontSize.xl, 
-    fontWeight: '700', 
+  headerLeft: {
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  calendarIcon: {
+    padding: spacing.xs,
+  },
+  welcomeLabel: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    fontFamily: fontFamily.bodyRegular,
+    marginBottom: 4,
+  },
+  welcomeName: {
+    fontSize: fontSize.xxl,
+    fontFamily: fontFamily.headingBold,
     color: colors.text,
     letterSpacing: -0.5,
   },
-  seeAllText: { 
-    fontSize: fontSize.sm, 
-    color: colors.accent, 
-    fontWeight: '600' 
+  section: {
+    marginBottom: spacing.xl,
+  },
+  sectionTitle: {
+    fontSize: fontSize.lg,
+    fontFamily: fontFamily.headingSemiBold,
+    color: colors.text,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.xs,
+  },
+  noticeList: {
+    paddingHorizontal: spacing.xs,
   },
   emptyState: {
     alignItems: 'center',
@@ -409,9 +355,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  emptyText: { 
-    fontSize: fontSize.md, 
+  emptyText: {
+    fontSize: fontSize.md,
     color: colors.textSecondary,
+    fontFamily: fontFamily.bodyRegular,
     marginBottom: spacing.lg,
   },
   browseButton: {
@@ -422,7 +369,7 @@ const styles = StyleSheet.create({
   },
   browseButtonText: {
     color: colors.white,
-    fontWeight: '600',
+    fontFamily: fontFamily.bodySemiBold,
     fontSize: fontSize.sm,
   },
   classList: {
@@ -448,12 +395,12 @@ const styles = StyleSheet.create({
   },
   dateDay: {
     fontSize: fontSize.lg,
-    fontWeight: '700',
+    fontFamily: fontFamily.bodySemiBold,
     color: colors.text,
   },
   dateMonth: {
     fontSize: fontSize.xs,
-    fontWeight: '600',
+    fontFamily: fontFamily.bodyMedium,
     color: colors.textSecondary,
   },
   classInfo: {
@@ -461,13 +408,14 @@ const styles = StyleSheet.create({
   },
   className: {
     fontSize: fontSize.md,
-    fontWeight: '600',
+    fontFamily: fontFamily.bodySemiBold,
     color: colors.text,
     marginBottom: 2,
   },
   classMeta: {
     fontSize: fontSize.sm,
     color: colors.textSecondary,
+    fontFamily: fontFamily.bodyRegular,
   },
   classMetaRow: {
     flexDirection: 'row',
@@ -481,7 +429,7 @@ const styles = StyleSheet.create({
   classMetaLink: {
     fontSize: fontSize.sm,
     color: colors.accent,
-    fontWeight: '600',
+    fontFamily: fontFamily.bodySemiBold,
   },
   classSubMeta: {
     fontSize: fontSize.xs,
@@ -500,7 +448,7 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     fontSize: fontSize.xs,
-    fontWeight: '600',
+    fontFamily: fontFamily.bodySemiBold,
     color: colors.white,
   },
 });

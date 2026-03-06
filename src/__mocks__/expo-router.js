@@ -10,6 +10,7 @@ export const router = {
 export const useRouter = jest.fn(() => router);
 export const usePathname = jest.fn(() => '/');
 export const useSegments = jest.fn(() => []);
+export const useLocalSearchParams = jest.fn(() => ({}));
 export const Link = ({ children }) => children;
 export const Redirect = () => null;
 export const Stack = { Screen: () => null };

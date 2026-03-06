@@ -1,19 +1,19 @@
-import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { colors, borderRadius, spacing, fontSize } from '../constants/theme';
+import { Modal, ScrollView, StyleSheet, Text, Pressable, View } from 'react-native';
+import { colors, borderRadius, spacing, fontSize, fontFamily } from '../constants/theme';
 
 export function InstructorModal({ instructor, onClose }) {
   if (!instructor) return null;
 
   return (
     <Modal transparent animationType="fade" visible={!!instructor} onRequestClose={onClose}>
-      <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
-        <TouchableOpacity style={styles.modal} activeOpacity={1} onPress={() => {}}>
+      <Pressable style={styles.overlay} onPress={onClose}>
+        <Pressable style={styles.modal} onPress={() => {}}>
           <ScrollView showsVerticalScrollIndicator={false}>
             <View style={styles.headerRow}>
               <Text style={styles.title}>{instructor.name}</Text>
-              <TouchableOpacity onPress={onClose} hitSlop={12} style={styles.closeIconBtn}>
+              <Pressable onPress={onClose} hitSlop={12} style={({ pressed }) => [styles.closeIconBtn, pressed && { opacity: 0.85 }]}>
                 <Text style={styles.close}>{'\u2715'}</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             {instructor.bio && <DetailRow label="Bio" value={instructor.bio} />}
@@ -22,8 +22,8 @@ export function InstructorModal({ instructor, onClose }) {
             {instructor.contact_email && <DetailRow label="Email" value={instructor.contact_email} />}
             {instructor.contact_phone && <DetailRow label="Phone" value={instructor.contact_phone} />}
           </ScrollView>
-        </TouchableOpacity>
-      </TouchableOpacity>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
@@ -60,6 +60,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: fontSize.xl,
     fontWeight: '700',
+    fontFamily: fontFamily.headingBold,
     color: colors.text,
     flex: 1,
     marginRight: spacing.md,
@@ -73,6 +74,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.textSecondary,
     fontWeight: '600',
+    fontFamily: fontFamily.bodySemiBold,
   },
   detailRow: {
     gap: 4,
@@ -81,12 +83,14 @@ const styles = StyleSheet.create({
   detailLabel: {
     fontSize: fontSize.xs,
     fontWeight: '600',
+    fontFamily: fontFamily.bodyMedium,
     color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   detailValue: {
     fontSize: fontSize.md,
+    fontFamily: fontFamily.bodyRegular,
     color: colors.text,
   },
 });

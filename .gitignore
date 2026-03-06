@@ -12,3 +12,17 @@ web-build/
 .env.local
 ios/
 android/
+
+# AI tooling configs (keep locally, don't commit)
+.agents/
+.cursor/
+.codex/
+.claude/
+
+# Coverage reports
+coverage/
+coverage-cart/
+coverage-ctx/
+
+#backend temp files
+supabase/.temp/

@@ -1,5 +1,5 @@
-import { TouchableOpacity, Text, ActivityIndicator, StyleSheet, View } from 'react-native';
-import { colors, borderRadius, spacing, fontSize } from '../constants/theme';
+import { Pressable, Text, ActivityIndicator, StyleSheet, View } from 'react-native';
+import { colors, borderRadius, spacing, fontSize, fontFamily } from '../constants/theme';
 
 export function Button({
   title,
@@ -40,11 +40,10 @@ export function Button({
   ];
 
   return (
-    <TouchableOpacity
-      style={buttonStyle}
+    <Pressable
+      style={({ pressed }) => [...buttonStyle, pressed && !isDisabled && { opacity: 0.85 }]}
       onPress={onPress}
       disabled={isDisabled}
-      activeOpacity={0.8}
     >
       {loading ? (
         <ActivityIndicator
@@ -57,7 +56,7 @@ export function Button({
           <Text style={textStyles}>{title}</Text>
         </View>
       )}
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
@@ -110,7 +109,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0, // Remove shadow when disabled
   },
   text: {
-    fontWeight: '600',
+    fontFamily: fontFamily.bodySemiBold,
     fontSize: fontSize.md,
     letterSpacing: 0.5, // Slight tracking for sophistication
   },

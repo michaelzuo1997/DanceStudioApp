@@ -1,20 +1,19 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../src/constants/theme';
-import { useCart } from '../../src/context/CartContext';
+import { useShopCart } from '../../src/context/ShopCartContext';
 import { useAuth } from '../../src/context/AuthContext';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Redirect } from 'expo-router';
 
-function CartTabIcon({ color, size }) {
-  const { items } = useCart();
-  const count = items.length;
+function ShopTabIcon({ color, size }) {
+  const { itemCount } = useShopCart();
   return (
     <View>
-      <Ionicons name="cart-outline" size={size} color={color} />
-      {count > 0 && (
+      <Ionicons name="storefront-outline" size={size} color={color} />
+      {itemCount > 0 && (
         <View style={badgeStyles.badge}>
-          <Text style={badgeStyles.badgeText}>{count > 9 ? '9+' : count}</Text>
+          <Text style={badgeStyles.badgeText}>{itemCount > 9 ? '9+' : itemCount}</Text>
         </View>
       )}
     </View>
@@ -108,7 +107,14 @@ export default function TabsLayout() {
         name="cart"
         options={{
           title: 'Cart',
-          tabBarIcon: ({ color, size }) => <CartTabIcon color={color} size={size} />,
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="shop"
+        options={{
+          title: 'Shop',
+          tabBarIcon: ({ color, size }) => <ShopTabIcon color={color} size={size} />,
         }}
       />
       <Tabs.Screen

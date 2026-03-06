@@ -3,7 +3,7 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   RefreshControl,
   StyleSheet,
   StatusBar,
@@ -13,12 +13,16 @@ import {
 import { useLocalSearchParams, router } from 'expo-router';
 import { useAuth } from '../../../src/context/AuthContext';
 import { useLanguage } from '../../../src/context/LanguageContext';
+import { useCampus } from '../../../src/context/CampusContext';
 import { supabase } from '../../../src/lib/supabase';
 import { useCart } from '../../../src/context/CartContext';
 import { Button } from '../../../src/components/Button';
+import { CampusSelector } from '../../../src/components/CampusSelector';
+import { DayOfWeekSelector } from '../../../src/components/DayOfWeekSelector';
 import { InstructorModal } from '../../../src/components/InstructorModal';
 import { StudioModal } from '../../../src/components/StudioModal';
-import { colors, spacing, fontSize, borderRadius } from '../../../src/constants/theme';
+import { ClassCartFloatingButton } from '../../../src/components/ClassCartFloatingButton';
+import { colors, spacing, fontSize, borderRadius, fontFamily } from '../../../src/constants/theme';
 
 // Category mapping
 const CATEGORY_MAP = {
@@ -30,21 +34,20 @@ const CATEGORY_MAP = {
   'miscellaneous': { name_en: 'Miscellaneous', name_zh: '其他', icon: '✨' },
 };
 
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
 export default function CategoryDetailScreen() {
   const { categoryId } = useLocalSearchParams();
   const { user } = useAuth();
   const { t, locale } = useLanguage();
+  const { selectedCampus } = useCampus();
   const { addItem, items } = useCart();
   
   const [category, setCategory] = useState(null);
   const [timetable, setTimetable] = useState([]);
-  const [classes, setClasses] = useState([]);
   const [enrolledIds, setEnrolledIds] = useState(new Set());
   const [refreshing, setRefreshing] = useState(false);
-  const [audience, setAudience] = useState('adult'); // 'adult' | 'children'
+  const [audience, setAudience] = useState(null); // null | 'adult' | 'children'
   const [duration, setDuration] = useState(null); // null | 60 | 90
+  const [selectedDay, setSelectedDay] = useState(null); // null | 0-6
   const [selectedInstructor, setSelectedInstructor] = useState(null);
   const [selectedStudio, setSelectedStudio] = useState(null);
 
@@ -84,10 +87,11 @@ export default function CategoryDetailScreen() {
     if (catId) {
       timetableQuery = timetableQuery.eq('category_id', catId);
     }
+    if (selectedCampus) {
+      timetableQuery = timetableQuery.eq('campus_id', selectedCampus);
+    }
     const { data: timetableData } = await timetableQuery;
     setTimetable(timetableData || []);
-
-    setClasses(timetableData || []);
 
     // Fetch enrollments
     if (user) {
@@ -97,7 +101,7 @@ export default function CategoryDetailScreen() {
         .eq('user_id', user.id);
       setEnrolledIds(new Set((enrollments || []).map(e => String(e.timetable_id))));
     }
-  }, [categoryId, user]);
+  }, [categoryId, user, selectedCampus]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -107,14 +111,15 @@ export default function CategoryDetailScreen() {
     setRefreshing(false);
   }, [fetchData]);
 
-  // Filter timetable by audience and duration
+  // Filter timetable by audience, duration, and day of week
   const filteredTimetable = useMemo(() => {
     return timetable.filter(item => {
-      if (audience && item.audience && item.audience !== audience) return false;
+      if (audience !== null && item.audience !== null && item.audience !== audience) return false;
       if (duration && item.duration_minutes !== duration) return false;
+      if (selectedDay !== null && item.day_of_week !== selectedDay) return false;
       return true;
     });
-  }, [timetable, audience, duration]);
+  }, [timetable, audience, duration, selectedDay]);
 
   // Group timetable by date
   const timetableByDay = useMemo(() => {
@@ -183,9 +188,9 @@ export default function CategoryDetailScreen() {
       
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.85 }]}>
           <Text style={styles.backText}>←</Text>
-        </TouchableOpacity>
+        </Pressable>
         <Text style={styles.title}>{getCategoryName()}</Text>
         <View style={styles.placeholder} />
       </View>
@@ -195,53 +200,67 @@ export default function CategoryDetailScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         showsVerticalScrollIndicator={false}
       >
+        {/* Campus Selector */}
+        <CampusSelector />
+
         {/* Audience Toggle */}
         {categoryId !== 'miscellaneous' && (
           <View style={styles.filterSection}>
             <Text style={styles.filterLabel}>{t('classes.selectAudience')}</Text>
             <View style={styles.toggleContainer}>
-              <TouchableOpacity
-                style={[styles.toggleButton, audience === 'adult' && styles.toggleActive]}
+              <Pressable
+                style={({ pressed }) => [styles.toggleButton, audience === null && styles.toggleActive, pressed && { opacity: 0.85 }]}
+                onPress={() => setAudience(null)}
+              >
+                <Text style={[styles.toggleText, audience === null && styles.toggleTextActive]}>
+                  {t('classes.allAudience')}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.toggleButton, audience === 'adult' && styles.toggleActive, pressed && { opacity: 0.85 }]}
                 onPress={() => setAudience('adult')}
               >
                 <Text style={[styles.toggleText, audience === 'adult' && styles.toggleTextActive]}>
                   {t('classes.adult')}
                 </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.toggleButton, audience === 'children' && styles.toggleActive]}
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.toggleButton, audience === 'children' && styles.toggleActive, pressed && { opacity: 0.85 }]}
                 onPress={() => setAudience('children')}
               >
                 <Text style={[styles.toggleText, audience === 'children' && styles.toggleTextActive]}>
                   {t('classes.children')}
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
         )}
+
+        {/* Day of Week */}
+        <DayOfWeekSelector selectedDay={selectedDay} onSelectDay={setSelectedDay} />
 
         {/* Duration Filter */}
         <View style={styles.filterSection}>
           <Text style={styles.filterLabel}>{t('classes.selectDuration')}</Text>
           <View style={styles.pillContainer}>
-            <TouchableOpacity
-              style={[styles.pill, duration === null && styles.pillActive]}
+            <Pressable
+              style={({ pressed }) => [styles.pill, duration === null && styles.pillActive, pressed && { opacity: 0.85 }]}
               onPress={() => setDuration(null)}
             >
               <Text style={[styles.pillText, duration === null && styles.pillTextActive]}>All</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.pill, duration === 60 && styles.pillActive]}
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.pill, duration === 60 && styles.pillActive, pressed && { opacity: 0.85 }]}
               onPress={() => setDuration(60)}
             >
               <Text style={[styles.pillText, duration === 60 && styles.pillTextActive]}>{t('classes.oneHour')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.pill, duration === 90 && styles.pillActive]}
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.pill, duration === 90 && styles.pillActive, pressed && { opacity: 0.85 }]}
               onPress={() => setDuration(90)}
             >
               <Text style={[styles.pillText, duration === 90 && styles.pillTextActive]}>{t('classes.oneHalfHour')}</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
 
@@ -270,12 +289,12 @@ export default function CategoryDetailScreen() {
                           ? (locale === 'zh' ? item.class_categories.name_zh : item.class_categories.name_en)
                           : getCategoryName()}
                       </Text>
-                      <TouchableOpacity onPress={() => setSelectedInstructor(item.instructors || null)}>
+                      <Pressable onPress={() => setSelectedInstructor(item.instructors || null)} style={({ pressed }) => [pressed && { opacity: 0.85 }]}>
                         <Text style={styles.instructorText}>{item.instructors?.name || item.instructor || 'Instructor'}</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => setSelectedStudio(item.studios || null)}>
+                      </Pressable>
+                      <Pressable onPress={() => setSelectedStudio(item.studios || null)} style={({ pressed }) => [pressed && { opacity: 0.85 }]}>
                         <Text style={styles.roomText}>{item.studios?.name || item.room || 'Studio'}</Text>
-                      </TouchableOpacity>
+                      </Pressable>
                       <Text style={styles.capacityText}>
                         {Number(item.current_enrollment || 0)}/{Number(item.max_capacity || 0)} {t('classes.capacity')}
                       </Text>
@@ -305,56 +324,10 @@ export default function CategoryDetailScreen() {
           )}
         </View>
 
-        {/* Upcoming Classes */}
-        {classes.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('classes.upcoming')}</Text>
-            {classes.map((c) => {
-              const classId = c.id ?? c.class_id;
-              const isEnrolled = enrolledIds.has(String(c.id));
-              const startTime = c.class_date ? new Date(c.class_date + 'T' + c.start_time) : null;
-              const displayName = c.name || c.duration_name || c.class_type || 'Dance Class';
-              
-              return (
-                <View key={classId} style={styles.classItem}>
-                  <View style={styles.classInfo}>
-                    <Text style={styles.className}>
-                      {c.class_categories
-                        ? (locale === 'zh' ? c.class_categories.name_zh : c.class_categories.name_en)
-                        : displayName}
-                    </Text>
-                    <Text style={styles.classMeta}>
-                      {startTime?.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
-                      {' at '}
-                      {formatTime(c.start_time)}
-                    </Text>
-                    <TouchableOpacity onPress={() => setSelectedInstructor(c.instructors || null)}>
-                      {c.instructors?.name && <Text style={styles.classInstructor}>with {c.instructors.name}</Text>}
-                    </TouchableOpacity>
-                  </View>
-                  <View style={styles.classActions}>
-                    <Text style={styles.classPrice}>A${Number(c.price_per_class || 0).toFixed(0)}</Text>
-                    {isEnrolled ? (
-                      <View style={styles.enrolledBadge}>
-                        <Text style={styles.enrolledText}>{t('classes.enrolled')}</Text>
-                      </View>
-                    ) : (
-                      <Button
-                        title={t('cart.addToCart')}
-                        size="sm"
-                        variant="secondary"
-                        onPress={() => handleAddToCart(c)}
-                      />
-                    )}
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        )}
       </ScrollView>
       <InstructorModal instructor={selectedInstructor} onClose={() => setSelectedInstructor(null)} />
       <StudioModal studio={selectedStudio} onClose={() => setSelectedStudio(null)} />
+      <ClassCartFloatingButton />
     </View>
   );
 }
@@ -379,11 +352,12 @@ const styles = StyleSheet.create({
   },
   backText: {
     fontSize: fontSize.xl,
+    fontFamily: fontFamily.bodyRegular,
     color: colors.text,
   },
   title: {
     fontSize: fontSize.lg,
-    fontWeight: '700',
+    fontFamily: fontFamily.headingSemiBold,
     color: colors.text,
   },
   placeholder: {
@@ -398,7 +372,7 @@ const styles = StyleSheet.create({
   },
   filterLabel: {
     fontSize: fontSize.sm,
-    fontWeight: '600',
+    fontFamily: fontFamily.bodyMedium,
     color: colors.textSecondary,
     marginBottom: spacing.sm,
     textTransform: 'uppercase',
@@ -422,7 +396,7 @@ const styles = StyleSheet.create({
   },
   toggleText: {
     fontSize: fontSize.sm,
-    fontWeight: '600',
+    fontFamily: fontFamily.bodySemiBold,
     color: colors.textSecondary,
   },
   toggleTextActive: {
@@ -443,7 +417,7 @@ const styles = StyleSheet.create({
   },
   pillText: {
     fontSize: fontSize.sm,
-    fontWeight: '600',
+    fontFamily: fontFamily.bodySemiBold,
     color: colors.textSecondary,
   },
   pillTextActive: {
@@ -454,7 +428,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: fontSize.lg,
-    fontWeight: '700',
+    fontFamily: fontFamily.headingSemiBold,
     color: colors.text,
     marginBottom: spacing.md,
   },
@@ -466,6 +440,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: fontSize.md,
+    fontFamily: fontFamily.bodyRegular,
     color: colors.textSecondary,
   },
   daySection: {
@@ -473,7 +448,7 @@ const styles = StyleSheet.create({
   },
   dayTitle: {
     fontSize: fontSize.md,
-    fontWeight: '600',
+    fontFamily: fontFamily.bodySemiBold,
     color: colors.accent,
     marginBottom: spacing.sm,
   },
@@ -491,7 +466,7 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontSize: fontSize.md,
-    fontWeight: '600',
+    fontFamily: fontFamily.bodySemiBold,
     color: colors.text,
   },
   durationText: {
@@ -504,17 +479,18 @@ const styles = StyleSheet.create({
   },
   instructorText: {
     fontSize: fontSize.md,
-    fontWeight: '500',
+    fontFamily: fontFamily.bodyMedium,
     color: colors.text,
   },
   classTitle: {
     fontSize: fontSize.sm,
-    fontWeight: '600',
+    fontFamily: fontFamily.bodySemiBold,
     color: colors.text,
     marginBottom: 2,
   },
   roomText: {
     fontSize: fontSize.xs,
+    fontFamily: fontFamily.bodyRegular,
     color: colors.textSecondary,
   },
   capacityText: {
@@ -527,55 +503,8 @@ const styles = StyleSheet.create({
   },
   priceText: {
     fontSize: fontSize.md,
-    fontWeight: '600',
+    fontFamily: fontFamily.bodySemiBold,
     color: colors.text,
     marginBottom: spacing.xs,
-  },
-  classItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.sm,
-    ...colors.shadows.sm,
-  },
-  classInfo: {
-    flex: 1,
-  },
-  className: {
-    fontSize: fontSize.md,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 2,
-  },
-  classMeta: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-  },
-  classInstructor: {
-    fontSize: fontSize.xs,
-    color: colors.textTertiary,
-    fontStyle: 'italic',
-  },
-  classActions: {
-    alignItems: 'flex-end',
-  },
-  classPrice: {
-    fontSize: fontSize.md,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  enrolledBadge: {
-    backgroundColor: colors.success + '20',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full,
-  },
-  enrolledText: {
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-    color: colors.success,
   },
 });

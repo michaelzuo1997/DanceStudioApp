@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Alert, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Alert, Pressable, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
 import { useLanguage } from '../../src/context/LanguageContext';
 import { supabase } from '../../src/lib/supabase';
 import { Button } from '../../src/components/Button';
-import { colors, spacing, fontSize, borderRadius } from '../../src/constants/theme';
+import { colors, spacing, fontSize, borderRadius, fontFamily, typography } from '../../src/constants/theme';
 
 export default function ProfileScreen() {
   const { user, userInfo, signOut } = useAuth();
@@ -103,7 +103,7 @@ export default function ProfileScreen() {
       {/* Language Toggle */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{t('profile.language')}</Text>
-        <TouchableOpacity style={styles.languageCard} onPress={toggleLanguage}>
+        <Pressable style={({ pressed }) => [styles.languageCard, pressed && { opacity: 0.85 }]} onPress={toggleLanguage}>
           <View style={styles.languageToggle}>
             <View style={[styles.langOption, locale === 'en' && styles.langActive]}>
               <Text style={[styles.langText, locale === 'en' && styles.langTextActive]}>EN</Text>
@@ -112,7 +112,7 @@ export default function ProfileScreen() {
               <Text style={[styles.langText, locale === 'zh' && styles.langTextActive]}>中文</Text>
             </View>
           </View>
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
       {/* My Bundles */}
@@ -121,11 +121,11 @@ export default function ProfileScreen() {
         {userBundles.length === 0 ? (
           <View style={styles.infoCard}>
             <Text style={styles.emptyBundles}>{t('profile.noBundles')}</Text>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/classes/bundles')}>
+            <Pressable style={({ pressed }) => [pressed && { opacity: 0.85 }]} onPress={() => router.push('/(tabs)/classes/bundles')}>
               <Text style={styles.buyBundlesLink}>
                 {locale === 'zh' ? '购买次卡 →' : 'Buy Bundles →'}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         ) : (
           <View style={styles.infoCard}>
@@ -176,6 +176,24 @@ export default function ProfileScreen() {
         </View>
       </View>
 
+      {/* Admin Panel — only visible to admin/owner */}
+      {(userInfo?.role === 'admin' || userInfo?.role === 'owner') && (
+        <View style={styles.section}>
+          <Pressable
+            style={({ pressed }) => [styles.adminCard, pressed && { opacity: 0.85 }]}
+            onPress={() => router.push('/(admin)')}
+            testID="admin-panel-btn"
+          >
+            <Text style={styles.adminIcon}>⚙️</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.adminTitle}>{t('admin.panel')}</Text>
+              <Text style={styles.adminSub}>{t('admin.manageClasses')}</Text>
+            </View>
+            <Text style={styles.adminArrow}>›</Text>
+          </Pressable>
+        </View>
+      )}
+
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{t('profile.appInfo')}</Text>
         <View style={styles.infoCard}>
@@ -218,17 +236,17 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     ...colors.shadows.sm,
   },
-  avatarText: { fontSize: 32, fontWeight: '700', color: colors.white },
-  name: { fontSize: fontSize.xl, fontWeight: '600', color: colors.text },
-  email: { fontSize: fontSize.sm, color: colors.textSecondary, marginTop: spacing.xs },
+  avatarText: { fontSize: 32, fontFamily: fontFamily.headingBold, color: colors.white },
+  name: { fontSize: fontSize.xl, fontFamily: fontFamily.headingSemiBold, color: colors.text },
+  email: { fontSize: fontSize.sm, color: colors.textSecondary, fontFamily: fontFamily.bodyRegular, marginTop: spacing.xs },
   section: { marginBottom: spacing.xxl },
   sectionTitle: { 
-    fontSize: fontSize.xs, 
-    fontWeight: '700', 
-    color: colors.textSecondary, 
-    marginBottom: spacing.md, 
-    textTransform: 'uppercase', 
-    letterSpacing: 1.5 
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.bodyMedium,
+    color: colors.textSecondary,
+    marginBottom: spacing.md,
+    textTransform: 'uppercase',
+    letterSpacing: 1.5
   },
   languageCard: {
     backgroundColor: colors.surface,
@@ -253,7 +271,7 @@ const styles = StyleSheet.create({
   },
   langText: {
     fontSize: fontSize.md,
-    fontWeight: '600',
+    fontFamily: fontFamily.bodySemiBold,
     color: colors.textSecondary,
   },
   langTextActive: {
@@ -274,7 +292,7 @@ const styles = StyleSheet.create({
   buyBundlesLink: {
     fontSize: fontSize.sm,
     color: colors.accent,
-    fontWeight: '600',
+    fontFamily: fontFamily.bodySemiBold,
     textAlign: 'center',
     paddingBottom: spacing.lg,
   },
@@ -292,7 +310,7 @@ const styles = StyleSheet.create({
   },
   bundleCount: {
     fontSize: fontSize.md,
-    fontWeight: '600',
+    fontFamily: fontFamily.bodySemiBold,
     color: colors.accent,
   },
   bundleCategory: {
@@ -312,7 +330,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.background,
   },
-  infoLabel: { fontSize: fontSize.md, color: colors.textSecondary },
-  infoValue: { fontSize: fontSize.md, fontWeight: '500', color: colors.text, maxWidth: '60%', textAlign: 'right' },
+  infoLabel: { fontSize: fontSize.md, color: colors.textSecondary, fontFamily: fontFamily.bodyRegular },
+  infoValue: { fontSize: fontSize.md, fontFamily: fontFamily.bodyMedium, color: colors.text, maxWidth: '60%', textAlign: 'right' },
   signOutBtn: { marginTop: spacing.lg, marginBottom: spacing.xxxl },
+  adminCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    ...colors.shadows.soft,
+  },
+  adminIcon: { fontSize: 28, marginRight: spacing.md },
+  adminTitle: { fontSize: fontSize.lg, fontFamily: fontFamily.bodySemiBold, color: colors.text },
+  adminSub: { fontSize: fontSize.sm, color: colors.textSecondary, fontFamily: fontFamily.bodyRegular, marginTop: 2 },
+  adminArrow: { fontSize: 24, color: colors.textTertiary, fontWeight: '300' },
 });
